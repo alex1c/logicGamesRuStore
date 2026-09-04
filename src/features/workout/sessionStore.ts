@@ -21,21 +21,31 @@ import { applyDailyCompletion } from '@/src/features/progress/streak'
 import { trackEvent } from '@/src/features/progress/analyticsEvents'
 import {
 	appendSessionHistory,
+	getAchievementStats,
 	getActiveSession,
 	getOrCreateProfile,
 	getRecentPuzzleIds,
 	getSkills,
 	getStreakState,
+	getUnlockedAchievements,
 	pushRecentPuzzleIds,
+	saveAchievementStats,
 	saveActiveSession,
 	saveDailyCompletion,
 	saveSkills,
 	saveStreakState,
+	saveUnlockedAchievements,
+	STORAGE_SCHEMA_VERSION,
 	type ActiveSessionPersisted,
 	type PuzzlePlanPersisted,
 	type PuzzleResultPersisted,
 	type SessionType,
 } from '@/src/storage'
+import {
+	evaluateAchievements,
+	type AchievementStats,
+} from '@/src/features/progress/achievements'
+import { setPendingAchievements } from '@/src/features/progress/achievementPending'
 import { formatClock, toLocalDateString, type LocalDateString } from '@/src/utils/localDate'
 
 export type WorkoutLiveState = {
@@ -392,6 +402,8 @@ async function finalizeSession(state: WorkoutLiveState): Promise<void> {
 		completedAt: Date.now(),
 	})
 
+	let streakState = await getStreakState()
+
 	if (state.sessionType === 'daily' && state.workoutDate) {
 		const breakdownMap = new Map<
 			PuzzleCategory,
@@ -409,7 +421,7 @@ async function finalizeSession(state: WorkoutLiveState): Promise<void> {
 			breakdownMap.set(puzzle.category, row)
 		})
 		await saveDailyCompletion({
-			schemaVersion: 2,
+			schemaVersion: STORAGE_SCHEMA_VERSION,
 			workoutDate: state.workoutDate,
 			sessionId: state.session.id,
 			correctCount: state.correctCount,
@@ -421,14 +433,11 @@ async function finalizeSession(state: WorkoutLiveState): Promise<void> {
 			),
 			completedAt: Date.now(),
 		})
-		const streak = applyDailyCompletion(
-			await getStreakState(),
-			state.workoutDate,
-		)
-		await saveStreakState(streak)
+		streakState = applyDailyCompletion(streakState, state.workoutDate)
+		await saveStreakState(streakState)
 		trackEvent('streak_updated', {
-			current: streak.current,
-			best: streak.best,
+			current: streakState.current,
+			best: streakState.best,
 		})
 		trackEvent('workout_completed', {
 			sessionId: state.session.id,
@@ -443,7 +452,61 @@ async function finalizeSession(state: WorkoutLiveState): Promise<void> {
 		})
 	}
 
+	const stats = await updateAchievementStatsFromSession(state, streakState)
+	const already = await getUnlockedAchievements()
+	const { newlyUnlocked, allUnlocked } = evaluateAchievements(stats, already)
+	if (newlyUnlocked.length > 0) {
+		await saveUnlockedAchievements(allUnlocked)
+		setPendingAchievements(newlyUnlocked)
+		for (const item of newlyUnlocked) {
+			trackEvent('achievement_unlocked', { id: item.id })
+		}
+	}
+
 	await saveActiveSession(null)
+}
+
+async function updateAchievementStatsFromSession(
+	state: WorkoutLiveState,
+	streakState: Awaited<ReturnType<typeof getStreakState>>,
+): Promise<AchievementStats> {
+	const stats = await getAchievementStats()
+	stats.workoutsCompleted += 1
+	stats.puzzlesSolved += state.session.puzzles.length
+	stats.puzzlesCorrect += state.correctCount
+	stats.currentStreak = streakState.current
+	stats.bestStreak = streakState.best
+
+	let run = 0
+	let bestNoHint = stats.noHintStreak
+	state.session.puzzles.forEach((puzzle, index) => {
+		const detail = state.resultDetails[index]
+		const ok = state.results[index] === 'correct'
+		if (ok) {
+			stats.correctByCategory[puzzle.category] =
+				(stats.correctByCategory[puzzle.category] ?? 0) + 1
+		}
+		if (ok && detail.hintsUsed === 0 && !detail.revealedSolution) {
+			run += 1
+			bestNoHint = Math.max(bestNoHint, run)
+		} else {
+			run = 0
+		}
+		if (!stats.playedCategories.includes(puzzle.category)) {
+			stats.playedCategories = [...stats.playedCategories, puzzle.category]
+		}
+	})
+	stats.noHintStreak = bestNoHint
+
+	if (
+		state.sessionType === 'daily' &&
+		state.correctCount === state.session.puzzles.length
+	) {
+		stats.perfectDailyCount += 1
+	}
+
+	await saveAchievementStats(stats)
+	return stats
 }
 
 export function abandonWorkout(): void {
@@ -457,7 +520,7 @@ async function persist(): Promise<void> {
 		return
 	}
 	const payload: ActiveSessionPersisted = {
-		schemaVersion: 2,
+		schemaVersion: STORAGE_SCHEMA_VERSION,
 		sessionId: live.session.id,
 		sessionType: live.sessionType,
 		workoutDate: live.workoutDate,

@@ -4,6 +4,7 @@ import { NumericInputRenderer } from './NumericInputRenderer'
 import { SelectItemRenderer } from './SelectItemRenderer'
 import { TextInputRenderer } from './TextInputRenderer'
 import { TapTargetRenderer } from './TapTargetRenderer'
+import { MatchstickRenderer } from './MatchstickRenderer'
 
 export type RendererProps = {
 	puzzle: Puzzle
@@ -14,7 +15,6 @@ export type RendererProps = {
 
 /**
  * Dispatch to the interaction-specific renderer.
- * Adding a new interactionType should only require a new renderer here.
  */
 export function PuzzleInteractionRenderer(props: RendererProps) {
 	const { puzzle } = props
@@ -58,6 +58,15 @@ export function PuzzleInteractionRenderer(props: RendererProps) {
 		case 'tap_target':
 			return (
 				<TapTargetRenderer
+					puzzle={puzzle}
+					disabled={props.disabled}
+					selectedValue={props.selectedValue}
+					onSelect={props.onSelect}
+				/>
+			)
+		case 'matchstick_move':
+			return (
+				<MatchstickRenderer
 					puzzle={puzzle}
 					disabled={props.disabled}
 					selectedValue={props.selectedValue}

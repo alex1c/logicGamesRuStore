@@ -6,11 +6,11 @@ import { sequenceNumberGeneratorV2 } from './sequenceNumberV2'
 import { mathPatternGeneratorV2 } from './mathPatternV2'
 import { oddOneOutNumbersGeneratorV2 } from './oddOneOutNumbersV2'
 import { attentionSymbolsGeneratorV2 } from './attentionSymbolsV2'
+import { matchsticksEquationGenerator } from './matchsticksEquation'
 import { registerGenerator, type PuzzleGenerator } from '../engine/generator'
 import type { Difficulty, Puzzle } from '../types'
 import { assertValidPuzzle, validatePuzzle } from '../validation/validatePuzzle'
 
-/** All shipped generators (v1 kept for identity replay + Codex audit). */
 export const ALL_GENERATORS: PuzzleGenerator[] = [
 	sequenceNumberGenerator,
 	mathPatternGenerator,
@@ -20,14 +20,19 @@ export const ALL_GENERATORS: PuzzleGenerator[] = [
 	mathPatternGeneratorV2,
 	oddOneOutNumbersGeneratorV2,
 	attentionSymbolsGeneratorV2,
+	matchsticksEquationGenerator,
 ]
 
-/** Current Phase-2 generators used by daily/practice planners. */
 export const PHASE2_GENERATORS: PuzzleGenerator[] = [
 	sequenceNumberGeneratorV2,
 	mathPatternGeneratorV2,
 	oddOneOutNumbersGeneratorV2,
 	attentionSymbolsGeneratorV2,
+]
+
+/** Phase 3 matchstick generators (oracle-audited separately). */
+export const MATCHSTICK_GENERATORS: PuzzleGenerator[] = [
+	matchsticksEquationGenerator,
 ]
 
 let registered = false
@@ -98,6 +103,7 @@ export {
 	mathPatternGeneratorV2,
 	oddOneOutNumbersGeneratorV2,
 	attentionSymbolsGeneratorV2,
+	matchsticksEquationGenerator,
 }
 
 ensureGeneratorsRegistered()

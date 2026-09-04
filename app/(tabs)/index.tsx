@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useState } from 'react'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppButton, SurfaceCard } from '@/src/components/ui'
@@ -16,6 +16,7 @@ import {
 import {
 	getDailyCompletion,
 	getOrCreateProfile,
+	getProgressAggregates,
 	getSkills,
 	getStreakState,
 	type DailyCompletionPersisted,
@@ -33,10 +34,11 @@ import { CATEGORY_LABELS } from '@/src/features/puzzles/types'
 const CATEGORY_ICON: Record<string, string> = {
 	logic: '🧩',
 	math: '🔢',
-	sequence: '🔢',
+	sequence: '📶',
 	attention: '👁',
 	odd_one_out: '🔎',
 	words: '🔤',
+	matchsticks: '｜',
 }
 
 type TodayState = {
@@ -44,6 +46,7 @@ type TodayState = {
 	mix: { category: string; label: string; count: number }[]
 	completion: DailyCompletionPersisted | null
 	canResume: boolean
+	puzzlesSolved: number
 	loading: boolean
 }
 
@@ -55,6 +58,7 @@ export default function TodayScreen() {
 		mix: [],
 		completion: null,
 		canResume: false,
+		puzzlesSolved: 0,
 		loading: true,
 	})
 
@@ -71,7 +75,7 @@ export default function TodayScreen() {
 					skills,
 				})
 				const completion = await getDailyCompletion(today)
-				const restored = await restoreActiveWorkout()
+				await restoreActiveWorkout()
 				const live = getLiveWorkout()
 				const canResume = Boolean(
 					live &&
@@ -79,18 +83,19 @@ export default function TodayScreen() {
 						live.sessionType === 'daily' &&
 						live.workoutDate === today,
 				)
+				const aggregates = await getProgressAggregates()
+				const streak = (await getStreakState()).current
 				if (!active) {
 					return
 				}
-				const streak = (await getStreakState()).current
 				setState({
 					streak,
 					mix: preview.mix,
 					completion,
 					canResume: canResume && !completion,
+					puzzlesSolved: aggregates.puzzlesCorrect,
 					loading: false,
 				})
-				void restored
 			})()
 			return () => {
 				active = false
@@ -119,15 +124,17 @@ export default function TodayScreen() {
 		>
 			<Text style={styles.kicker}>Логические игры</Text>
 			<Text style={styles.title}>
-				{done ? 'Сегодня выполнено ✓' : 'Сегодняшняя тренировка'}
+				{done ? 'Сегодня выполнено' : 'Сегодня'}
 			</Text>
 			<Text style={styles.subtitle}>
-				Короткая смешанная сессия без спешки — просто ежедневная тренировка
-				внимания и рассуждения.
+				{done
+					? 'Дневная тренировка уже позади. Можно ещё немного попрактиковаться.'
+					: 'Короткая смешанная сессия — 10 задач без спешки.'}
 			</Text>
 
 			{!done && (
-				<SurfaceCard style={styles.mixCard}>
+				<SurfaceCard style={styles.heroCard}>
+					<Text style={styles.heroTitle}>Daily Workout</Text>
 					{state.mix.map((row) => (
 						<View key={row.category} style={styles.mixRow}>
 							<Text style={styles.mixLabel}>
@@ -145,18 +152,19 @@ export default function TodayScreen() {
 			)}
 
 			{done && state.completion && (
-				<SurfaceCard style={styles.mixCard}>
+				<SurfaceCard style={styles.heroCard}>
 					<Text style={styles.scoreLine}>
-						{state.completion.correctCount} из{' '}
+						{state.completion.correctCount} /{' '}
 						{state.completion.correctCount + state.completion.wrongCount}
 					</Text>
 					<Text style={styles.mixMeta}>
-						⏱ {formatClock(state.completion.elapsedMs)} · 💡 подсказок:{' '}
-						{state.completion.hintsUsed}
+						⏱ {formatClock(state.completion.elapsedMs)} · 💡{' '}
+						{state.completion.hintsUsed} подсказок
 					</Text>
 					{state.completion.categoryBreakdown.map((row) => (
 						<View key={row.category} style={styles.mixRow}>
 							<Text style={styles.mixLabel}>
+								{CATEGORY_ICON[row.category] ?? '•'}{' '}
 								{CATEGORY_LABELS[row.category]}
 							</Text>
 							<Text style={styles.mixCount}>
@@ -165,6 +173,17 @@ export default function TodayScreen() {
 						</View>
 					))}
 				</SurfaceCard>
+			)}
+
+			<View style={styles.streakRow}>
+				<Text style={styles.streakEmoji}>🔥</Text>
+				<Text style={styles.streakText}>Серия: {state.streak} дней</Text>
+			</View>
+
+			{state.puzzlesSolved > 0 && (
+				<Text style={styles.snapshot}>
+					Всего верных ответов: {state.puzzlesSolved}
+				</Text>
 			)}
 
 			{!done && (
@@ -193,10 +212,13 @@ export default function TodayScreen() {
 				</>
 			)}
 
-			<View style={styles.streakRow}>
-				<Text style={styles.streakEmoji}>🔥</Text>
-				<Text style={styles.streakText}>Серия: {state.streak} дней</Text>
-			</View>
+			{!done && (
+				<AppButton
+					label="Игровые режимы"
+					variant="secondary"
+					onPress={() => router.push('/(tabs)/play')}
+				/>
+			)}
 		</ScrollView>
 	)
 }
@@ -212,14 +234,20 @@ const styles = StyleSheet.create({
 	},
 	title: { ...typography.display, color: colors.light.textPrimary },
 	subtitle: { ...typography.body, color: colors.light.textSecondary },
-	mixCard: { gap: spacing.sm, ...elevation.sm },
+	heroCard: { gap: spacing.sm, ...elevation.sm },
+	heroTitle: { ...typography.subtitle, color: colors.light.textPrimary },
 	mixRow: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
 		alignItems: 'center',
 		paddingVertical: spacing.xxs,
 	},
-	mixLabel: { ...typography.body, color: colors.light.textPrimary },
+	mixLabel: {
+		...typography.body,
+		color: colors.light.textPrimary,
+		flexShrink: 1,
+		paddingRight: spacing.sm,
+	},
 	mixCount: {
 		...typography.bodyStrong,
 		color: colors.light.primary,
@@ -234,7 +262,8 @@ const styles = StyleSheet.create({
 	},
 	mixMeta: { ...typography.caption, color: colors.light.textSecondary },
 	scoreLine: {
-		fontSize: 36,
+		fontSize: 40,
+		lineHeight: 48,
 		fontWeight: '700',
 		color: colors.light.primary,
 		marginBottom: spacing.xs,
@@ -251,4 +280,5 @@ const styles = StyleSheet.create({
 	},
 	streakEmoji: { fontSize: 18 },
 	streakText: { ...typography.bodyStrong, color: colors.light.streak },
+	snapshot: { ...typography.caption, color: colors.light.textTertiary },
 })

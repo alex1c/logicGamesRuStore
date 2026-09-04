@@ -14,6 +14,7 @@ export type AnalyticsEventName =
 	| 'solution_revealed'
 	| 'category_selected'
 	| 'streak_updated'
+	| 'achievement_unlocked'
 
 export type AnalyticsPayload = Record<
 	string,

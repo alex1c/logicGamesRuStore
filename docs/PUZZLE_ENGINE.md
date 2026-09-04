@@ -19,6 +19,7 @@ Architectural contract for generating, validating, and presenting logic puzzles.
 | `select_item`     | item id             | odd-one-out              |
 | `text_input`      | normalized string   | word puzzles             |
 | `tap_target`      | cell id             | attention grids          |
+| `matchstick_move` | `fromId->toId`      | matchstick equations     |
 
 Every puzzle must include:
 
@@ -32,7 +33,7 @@ Empty explanations are invalid.
 
 `logic | math | sequence | attention | odd_one_out | words | matchsticks`
 
-Not all categories have generators in Phase 1.
+Matchsticks use generator `matchsticks.equation.v1` (reverse construction + uniqueness oracle).
 
 ## Deterministic RNG
 

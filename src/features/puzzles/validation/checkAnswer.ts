@@ -1,4 +1,8 @@
 import type { Puzzle } from '../types'
+import {
+	applyMove,
+	evaluateEquation,
+} from '../matchsticks/equation'
 
 export type AnswerCheckResult = {
 	isCorrect: boolean
@@ -79,6 +83,25 @@ export function checkAnswer(
 			return {
 				isCorrect: submittedId === puzzle.answer,
 				normalizedSubmitted: submittedId,
+				normalizedExpected: puzzle.answer,
+			}
+		}
+		case 'matchstick_move': {
+			const submittedMove = raw.trim()
+			const accepted = [
+				puzzle.answer,
+				...(puzzle.acceptedMoves ?? []),
+			]
+			let isCorrect = accepted.includes(submittedMove)
+			if (!isCorrect && submittedMove.includes('->')) {
+				const [fromId, toId] = submittedMove.split('->')
+				const next = applyMove(puzzle.state, { fromId, toId })
+				const evaled = next ? evaluateEquation(next) : null
+				isCorrect = Boolean(evaled?.value)
+			}
+			return {
+				isCorrect,
+				normalizedSubmitted: submittedMove,
 				normalizedExpected: puzzle.answer,
 			}
 		}

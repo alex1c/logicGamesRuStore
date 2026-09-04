@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppButton, SurfaceCard } from '@/src/components/ui'
@@ -10,10 +10,15 @@ import {
 	SKILL_DEFAULT,
 } from '@/src/features/progress/skillModel'
 import {
+	ACHIEVEMENT_DEFS,
+	type UnlockedAchievement,
+} from '@/src/features/progress/achievements'
+import {
 	getProgressAggregates,
 	getSessionHistory,
 	getSkills,
 	getStreakState,
+	getUnlockedAchievements,
 	type SessionHistoryItem,
 } from '@/src/storage'
 import { CATEGORY_LABELS } from '@/src/features/puzzles/types'
@@ -32,6 +37,10 @@ export default function ProgressScreen() {
 		puzzlesCorrect: 0,
 	})
 	const [history, setHistory] = useState<SessionHistoryItem[]>([])
+	const [unlocked, setUnlocked] = useState<UnlockedAchievement[]>([])
+	const [showAllAchievements, setShowAllAchievements] = useState(false)
+	const [selectedHistory, setSelectedHistory] =
+		useState<SessionHistoryItem | null>(null)
 
 	useFocusEffect(
 		useCallback(() => {
@@ -40,6 +49,7 @@ export default function ProgressScreen() {
 				setStreak(await getStreakState())
 				setAggregates(await getProgressAggregates())
 				setHistory(await getSessionHistory())
+				setUnlocked(await getUnlockedAchievements())
 			})()
 		}, []),
 	)
@@ -52,6 +62,10 @@ export default function ProgressScreen() {
 			: Math.round(
 					(aggregates.puzzlesCorrect / aggregates.puzzlesSolved) * 100,
 				)
+	const unlockedIds = new Set(unlocked.map((a) => a.id))
+	const previewDefs = showAllAchievements
+		? ACHIEVEMENT_DEFS
+		: ACHIEVEMENT_DEFS.slice(0, 6)
 
 	return (
 		<ScrollView
@@ -79,8 +93,7 @@ export default function ProgressScreen() {
 
 			<Text style={styles.section}>Ваши навыки</Text>
 			<Text style={styles.sectionHint}>
-				Шкала 0–100 отражает практику в категориях. Это не IQ и не оценка
-				интеллекта.
+				Шкала 0–100 отражает практику. Это не IQ и не оценка интеллекта.
 			</Text>
 
 			{PLAYABLE_CATEGORIES.map((category) => {
@@ -113,6 +126,41 @@ export default function ProgressScreen() {
 				)
 			})}
 
+			<Text style={styles.section}>Достижения</Text>
+			<Text style={styles.sectionHint}>
+				{unlocked.length} из {ACHIEVEMENT_DEFS.length}
+			</Text>
+			{previewDefs.map((def) => {
+				const done = unlockedIds.has(def.id)
+				const unlockedAt = unlocked.find((u) => u.id === def.id)?.unlockedAt
+				return (
+					<SurfaceCard key={def.id} style={styles.achievementCard}>
+						<Text style={styles.achievementTitle}>
+							{def.icon} {def.title}
+						</Text>
+						<Text style={styles.achievementBody}>{def.description}</Text>
+						<Text style={styles.achievementStatus}>
+							{done
+								? unlockedAt
+									? `Выполнено · ${new Date(unlockedAt).toLocaleDateString('ru-RU')}`
+									: 'Выполнено'
+								: 'Ещё впереди'}
+						</Text>
+					</SurfaceCard>
+				)
+			})}
+			<Pressable
+				accessibilityRole="button"
+				accessibilityLabel={
+					showAllAchievements ? 'Свернуть достижения' : 'Все достижения'
+				}
+				onPress={() => setShowAllAchievements((v) => !v)}
+			>
+				<Text style={styles.link}>
+					{showAllAchievements ? 'Свернуть' : 'Все достижения'}
+				</Text>
+			</Pressable>
+
 			{hasActivity && (
 				<>
 					<Text style={styles.section}>Активность</Text>
@@ -128,15 +176,59 @@ export default function ProgressScreen() {
 
 					<Text style={styles.section}>Последние тренировки</Text>
 					{history.slice(0, 8).map((item) => (
-						<SurfaceCard key={`${item.sessionId}-${item.completedAt}`} style={styles.historyCard}>
-							<Text style={styles.historyTitle}>{item.title}</Text>
-							<Text style={styles.historyMeta}>
-								{item.correctCount}/{item.total} · ⏱ {formatClock(item.elapsedMs)} ·{' '}
-								{item.sessionType === 'daily' ? 'Сегодня' : 'Практика'}
-							</Text>
-						</SurfaceCard>
+						<Pressable
+							key={`${item.sessionId}-${item.completedAt}`}
+							accessibilityRole="button"
+							accessibilityLabel={item.title}
+							onPress={() => setSelectedHistory(item)}
+						>
+							<SurfaceCard style={styles.historyCard}>
+								<Text style={styles.historyTitle}>{item.title}</Text>
+								<Text style={styles.historyMeta}>
+									{item.correctCount}/{item.total} · ⏱{' '}
+									{formatClock(item.elapsedMs)} ·{' '}
+									{item.sessionType === 'daily' ? 'Daily' : 'Практика'}
+								</Text>
+							</SurfaceCard>
+						</Pressable>
 					))}
 				</>
+			)}
+
+			{selectedHistory && (
+				<SurfaceCard style={styles.detailCard}>
+					<Text style={styles.achievementTitle}>Детали тренировки</Text>
+					<Text style={styles.achievementBody}>{selectedHistory.title}</Text>
+					<Stat
+						label="Тип"
+						value={
+							selectedHistory.sessionType === 'daily' ? 'Daily' : 'Практика'
+						}
+					/>
+					<Stat
+						label="Счёт"
+						value={`${selectedHistory.correctCount}/${selectedHistory.total}`}
+					/>
+					<Stat
+						label="Время"
+						value={formatClock(selectedHistory.elapsedMs)}
+					/>
+					<Stat
+						label="Подсказки"
+						value={String(selectedHistory.hintsUsed)}
+					/>
+					<Stat
+						label="Дата"
+						value={new Date(selectedHistory.completedAt).toLocaleString(
+							'ru-RU',
+						)}
+					/>
+					<AppButton
+						label="Закрыть"
+						variant="secondary"
+						onPress={() => setSelectedHistory(null)}
+					/>
+				</SurfaceCard>
 			)}
 		</ScrollView>
 	)
@@ -154,7 +246,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
 	screen: { flex: 1, backgroundColor: colors.light.background },
 	content: { padding: spacing.lg, gap: spacing.sm },
-	title: { ...typography.display, color: colors.light.textPrimary, marginBottom: spacing.sm },
+	title: {
+		...typography.display,
+		color: colors.light.textPrimary,
+		marginBottom: spacing.sm,
+	},
 	section: {
 		...typography.subtitle,
 		color: colors.light.textPrimary,
@@ -166,13 +262,14 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.xs,
 	},
 	emptyTitle: { ...typography.subtitle, color: colors.light.textPrimary },
-	emptyBody: { ...typography.body, color: colors.light.textSecondary, marginTop: spacing.xs },
+	emptyBody: {
+		...typography.body,
+		color: colors.light.textSecondary,
+		marginTop: spacing.xs,
+	},
 	spacer: { height: spacing.md },
 	skillRow: { gap: spacing.xs, marginBottom: spacing.sm },
-	skillHeader: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-	},
+	skillHeader: { flexDirection: 'row', justifyContent: 'space-between' },
 	skillLabel: { ...typography.body, color: colors.light.textPrimary },
 	skillScore: { ...typography.bodyStrong, color: colors.light.primary },
 	barTrack: {
@@ -186,14 +283,21 @@ const styles = StyleSheet.create({
 		backgroundColor: colors.light.primary,
 		borderRadius: radius.pill,
 	},
-	statsCard: { gap: spacing.sm },
-	statRow: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
+	achievementCard: { gap: 4 },
+	achievementTitle: { ...typography.bodyStrong, color: colors.light.textPrimary },
+	achievementBody: { ...typography.caption, color: colors.light.textSecondary },
+	achievementStatus: { ...typography.label, color: colors.light.primary },
+	link: {
+		...typography.bodyStrong,
+		color: colors.light.primary,
+		marginBottom: spacing.sm,
 	},
+	statsCard: { gap: spacing.sm },
+	statRow: { flexDirection: 'row', justifyContent: 'space-between' },
 	statLabel: { ...typography.body, color: colors.light.textSecondary },
 	statValue: { ...typography.bodyStrong, color: colors.light.textPrimary },
 	historyCard: { gap: 4 },
 	historyTitle: { ...typography.bodyStrong, color: colors.light.textPrimary },
 	historyMeta: { ...typography.caption, color: colors.light.textSecondary },
+	detailCard: { gap: spacing.sm, marginTop: spacing.md },
 })

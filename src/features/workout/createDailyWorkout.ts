@@ -16,7 +16,7 @@ import type { PuzzlePlanPersisted } from '@/src/storage'
 import type { LocalDateString } from '@/src/utils/localDate'
 import type { RandomSource } from '@/src/utils/prng'
 
-/** Categories that ship playable content in Phase 2. */
+/** Categories that ship playable content. */
 export const PLAYABLE_CATEGORIES: PuzzleCategory[] = [
 	'logic',
 	'math',
@@ -24,6 +24,7 @@ export const PLAYABLE_CATEGORIES: PuzzleCategory[] = [
 	'attention',
 	'odd_one_out',
 	'words',
+	'matchsticks',
 ]
 
 export const DAILY_SIZE = 10
@@ -44,17 +45,23 @@ const GENERATOR_FOR_CATEGORY: Partial<
 	sequence: { generatorId: 'sequence.number.v2', version: 2 },
 	attention: { generatorId: 'attention.symbols.v2', version: 2 },
 	odd_one_out: { generatorId: 'odd_one_out.numbers.v2', version: 2 },
+	matchsticks: { generatorId: 'matchsticks.equation.v1', version: 1 },
 }
 
 const CURATED_CATEGORIES: PuzzleCategory[] = ['logic', 'words']
 
 /**
  * Build a diverse 10-puzzle category mix from a seeded RNG.
- * Keeps counts nearly even (max − min ≤ 1).
+ * Rules: ≥5 distinct categories, nearly even counts, no 3+ identical in a row.
  */
 export function buildCategoryMix(rng: RandomSource, size = DAILY_SIZE): PuzzleCategory[] {
 	const base = [...PLAYABLE_CATEGORIES]
-	const list: PuzzleCategory[] = [...rng.shuffle(base)]
+	const list: PuzzleCategory[] = []
+
+	// Seed with a shuffled subset covering diversity first.
+	const starter = rng.shuffle(base).slice(0, Math.min(5, base.length))
+	list.push(...starter)
+
 	while (list.length < size) {
 		const counts = new Map<PuzzleCategory, number>()
 		for (const category of base) {
@@ -64,10 +71,83 @@ export function buildCategoryMix(rng: RandomSource, size = DAILY_SIZE): PuzzleCa
 			counts.set(category, (counts.get(category) ?? 0) + 1)
 		}
 		const min = Math.min(...counts.values())
-		const candidates = base.filter((category) => counts.get(category) === min)
+		let candidates = base.filter((category) => counts.get(category) === min)
+		const last = list[list.length - 1]
+		const last2 = list[list.length - 2]
+		if (last && last === last2) {
+			candidates = candidates.filter((category) => category !== last)
+			if (candidates.length === 0) {
+				candidates = base.filter((category) => category !== last)
+			}
+		}
 		list.push(rng.pick(candidates))
 	}
-	return rng.shuffle(list)
+
+	// Soft reshuffle while preserving no-3-in-a-row where possible.
+	return softenRuns(list, rng)
+}
+
+function softenRuns(
+	input: PuzzleCategory[],
+	rng: RandomSource,
+): PuzzleCategory[] {
+	const list = [...input]
+	// Light pairwise swaps that do not create triple runs.
+	for (let attempt = 0; attempt < list.length; attempt += 1) {
+		const i = rng.nextInt(0, list.length - 1)
+		const j = rng.nextInt(0, list.length - 1)
+		if (i === j) {
+			continue
+		}
+		const trial = [...list]
+		const tmp = trial[i]
+		trial[i] = trial[j]
+		trial[j] = tmp
+		if (!hasTripleRun(trial)) {
+			list[i] = trial[i]
+			list[j] = trial[j]
+		}
+	}
+	// Final repair pass for any remaining triples.
+	for (let i = 2; i < list.length; i += 1) {
+		if (list[i] === list[i - 1] && list[i] === list[i - 2]) {
+			const swapWith = list.findIndex(
+				(category, index) =>
+					index !== i &&
+					category !== list[i] &&
+					!wouldCreateTriple(list, i, index),
+			)
+			if (swapWith >= 0) {
+				const tmp = list[i]
+				list[i] = list[swapWith]
+				list[swapWith] = tmp
+			} else {
+				void rng
+			}
+		}
+	}
+	return list
+}
+
+function hasTripleRun(list: PuzzleCategory[]): boolean {
+	for (let i = 2; i < list.length; i += 1) {
+		if (list[i] === list[i - 1] && list[i] === list[i - 2]) {
+			return true
+		}
+	}
+	return false
+}
+
+function wouldCreateTriple(
+	list: PuzzleCategory[],
+	from: number,
+	to: number,
+): boolean {
+	const trial = [...list]
+	const tmp = trial[from]
+	trial[from] = trial[to]
+	trial[to] = tmp
+	return hasTripleRun(trial)
 }
 
 function summarizeMix(categories: PuzzleCategory[]) {

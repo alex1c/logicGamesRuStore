@@ -1,16 +1,20 @@
 /**
- * Versioned app persistence (schema v2).
- * Demo schema v1 sessions are dropped safely; settings/profile migrate forward.
+ * Versioned app persistence (schema v3).
+ * Demo schema v1 sessions are dropped safely; v2 progress migrates into v3.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { Difficulty, PuzzleCategory } from '@/src/features/puzzles/types'
 import type { SkillMap } from '@/src/features/progress/skillModel'
 import { EMPTY_STREAK, type StreakState } from '@/src/features/progress/streak'
+import type {
+	AchievementStats,
+	UnlockedAchievement,
+} from '@/src/features/progress/achievements'
 import type { LocalDateString } from '@/src/utils/localDate'
 import { createRng } from '@/src/utils/prng'
 
-export const STORAGE_SCHEMA_VERSION = 2 as const
+export const STORAGE_SCHEMA_VERSION = 3 as const
 
 const KEYS = {
 	meta: '@fm/meta',
@@ -22,6 +26,8 @@ const KEYS = {
 	dailyCompletion: '@fm/dailyCompletion',
 	sessionHistory: '@fm/sessionHistory',
 	recentPuzzles: '@fm/recentPuzzles',
+	achievements: '@fm/achievements',
+	achievementStats: '@fm/achievementStats',
 	/** Legacy Phase 1 / Codex demo key — cleared on migrate. */
 	legacyDemoWorkout: '@fm/demoWorkout',
 	legacyOnboarding: '@fm/onboardingVersion',
@@ -71,7 +77,7 @@ export type PuzzleResultPersisted = {
 }
 
 export type ActiveSessionPersisted = {
-	schemaVersion: typeof STORAGE_SCHEMA_VERSION
+	schemaVersion: 2 | 3
 	sessionId: string
 	sessionType: SessionType
 	/** Present for daily sessions. */
@@ -93,7 +99,7 @@ export type ActiveSessionPersisted = {
 }
 
 export type DailyCompletionPersisted = {
-	schemaVersion: typeof STORAGE_SCHEMA_VERSION
+	schemaVersion: 2 | 3
 	workoutDate: LocalDateString
 	sessionId: string
 	correctCount: number
@@ -146,9 +152,14 @@ type MetaState = {
 
 let migrated = false
 
+/** Test helper — allow re-running migration logic. */
+export function resetStorageMigrationFlagForTests(): void {
+	migrated = false
+}
+
 /**
- * Ensure storage is on schema v2. Safe to call repeatedly.
- * Drops incompatible demo sessions; preserves settings when possible.
+ * Ensure storage is on schema v3. Safe to call repeatedly.
+ * v1 demo sessions dropped; v2 progress data preserved into v3.
  */
 export async function ensureStorageMigrated(): Promise<void> {
 	if (migrated) {
@@ -160,27 +171,91 @@ export async function ensureStorageMigrated(): Promise<void> {
 		return
 	}
 
-	// Drop legacy demo session — puzzle identity cannot be reliably rebuilt
-	// into the new ActiveSessionPersisted plan format.
-	await AsyncStorage.removeItem(KEYS.legacyDemoWorkout)
+	const previous = meta?.schemaVersion ?? 0
 
-	const legacySettings = await readJson<Partial<AppSettings>>(KEYS.settings)
-	if (legacySettings) {
-		await writeJson(KEYS.settings, {
-			...DEFAULT_SETTINGS,
-			...legacySettings,
-			hapticsEnabled:
-				typeof legacySettings.hapticsEnabled === 'boolean'
-					? legacySettings.hapticsEnabled
-					: true,
-		})
+	// Drop legacy demo session from Phase 1.
+	await AsyncStorage.removeItem(KEYS.legacyDemoWorkout)
+	await AsyncStorage.removeItem(KEYS.legacyStreak)
+
+	if (previous < 2) {
+		const legacySettings = await readJson<Partial<AppSettings>>(KEYS.settings)
+		if (legacySettings) {
+			await writeJson(KEYS.settings, {
+				...DEFAULT_SETTINGS,
+				...legacySettings,
+				hapticsEnabled:
+					typeof legacySettings.hapticsEnabled === 'boolean'
+						? legacySettings.hapticsEnabled
+						: true,
+			})
+		}
 	}
 
-	// Legacy streak placeholder was never a real completion streak — reset.
-	await AsyncStorage.removeItem(KEYS.legacyStreak)
+	// v2 → v3: add achievement stores if missing (do not wipe progress).
+	const achievements = await readJson<UnlockedAchievement[]>(KEYS.achievements)
+	if (!Array.isArray(achievements)) {
+		await writeJson(KEYS.achievements, [])
+	}
+	const stats = await readJson<AchievementStats>(KEYS.achievementStats)
+	if (!stats) {
+		await writeJson(KEYS.achievementStats, emptyAchievementStats())
+	}
+
+	// Active sessions from v2 remain compatible (same shape + schemaVersion field).
+	const active = await readJson<ActiveSessionPersisted>(KEYS.activeSession)
+	if (active && active.schemaVersion === 2) {
+		active.schemaVersion = STORAGE_SCHEMA_VERSION
+		await writeJson(KEYS.activeSession, active)
+	}
+
+	const daily = await readJson<DailyCompletionPersisted>(KEYS.dailyCompletion)
+	if (daily && daily.schemaVersion === 2) {
+		daily.schemaVersion = STORAGE_SCHEMA_VERSION
+		await writeJson(KEYS.dailyCompletion, daily)
+	}
 
 	await writeJson(KEYS.meta, { schemaVersion: STORAGE_SCHEMA_VERSION })
 	migrated = true
+}
+
+export function emptyAchievementStats(): AchievementStats {
+	return {
+		workoutsCompleted: 0,
+		puzzlesSolved: 0,
+		puzzlesCorrect: 0,
+		currentStreak: 0,
+		bestStreak: 0,
+		noHintStreak: 0,
+		correctByCategory: {},
+		playedCategories: [],
+		perfectDailyCount: 0,
+	}
+}
+
+export async function getUnlockedAchievements(): Promise<UnlockedAchievement[]> {
+	await ensureStorageMigrated()
+	const list = await readJson<UnlockedAchievement[]>(KEYS.achievements)
+	return Array.isArray(list) ? list : []
+}
+
+export async function saveUnlockedAchievements(
+	list: UnlockedAchievement[],
+): Promise<void> {
+	await ensureStorageMigrated()
+	await writeJson(KEYS.achievements, list)
+}
+
+export async function getAchievementStats(): Promise<AchievementStats> {
+	await ensureStorageMigrated()
+	const stored = await readJson<AchievementStats>(KEYS.achievementStats)
+	return { ...emptyAchievementStats(), ...stored }
+}
+
+export async function saveAchievementStats(
+	stats: AchievementStats,
+): Promise<void> {
+	await ensureStorageMigrated()
+	await writeJson(KEYS.achievementStats, stats)
 }
 
 export async function getSettings(): Promise<AppSettings> {
@@ -264,10 +339,12 @@ export async function saveStreakState(state: StreakState): Promise<void> {
 export async function getActiveSession(): Promise<ActiveSessionPersisted | null> {
 	await ensureStorageMigrated()
 	const value = await readJson<ActiveSessionPersisted>(KEYS.activeSession)
-	if (!value || value.schemaVersion !== STORAGE_SCHEMA_VERSION) {
-		return null
-	}
-	if (!Array.isArray(value.plan) || !Array.isArray(value.results)) {
+	if (
+		!value ||
+		(value.schemaVersion !== 2 && value.schemaVersion !== 3) ||
+		!Array.isArray(value.plan) ||
+		!Array.isArray(value.results)
+	) {
 		return null
 	}
 	return value
@@ -291,7 +368,7 @@ export async function getDailyCompletion(
 	const value = await readJson<DailyCompletionPersisted>(KEYS.dailyCompletion)
 	if (
 		!value ||
-		value.schemaVersion !== STORAGE_SCHEMA_VERSION ||
+		(value.schemaVersion !== 2 && value.schemaVersion !== 3) ||
 		value.workoutDate !== workoutDate
 	) {
 		return null
@@ -302,7 +379,10 @@ export async function getDailyCompletion(
 export async function getAnyDailyCompletion(): Promise<DailyCompletionPersisted | null> {
 	await ensureStorageMigrated()
 	const value = await readJson<DailyCompletionPersisted>(KEYS.dailyCompletion)
-	if (!value || value.schemaVersion !== STORAGE_SCHEMA_VERSION) {
+	if (
+		!value ||
+		(value.schemaVersion !== 2 && value.schemaVersion !== 3)
+	) {
 		return null
 	}
 	return value

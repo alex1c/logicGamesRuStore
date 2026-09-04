@@ -36,30 +36,37 @@ npm run android
 
 ```bash
 npm test
+npm run test:audit
 npm run typecheck
 npm run lint
 npm run doctor
 ```
+
+`npm test` — unit/smoke (без тяжёлых 10k audit-сюитов).  
+`npm run test:audit` — Codex generator audit + matchstick oracle (10k seeds).
 
 ## Структура
 
 ```text
 app/                    # Expo Router screens
   (tabs)/               # Сегодня / Играть / Прогресс / Ещё
-  workout/              # Demo workout + result
+  workout/              # Daily/practice runner + result
 src/
   features/puzzles/     # Puzzle Engine (domain)
     engine/             # Generator contract, PuzzleRunner
-    generators/         # Seeded generators
+    generators/         # Seeded generators (incl. matchsticks)
+    matchsticks/        # Seven-segment equation model + oracle
     renderers/          # Interaction-type UI
     validation/         # Puzzle + answer validation
     types/              # Discriminated unions
     curated/            # Hand-authored puzzles
-  features/workout/     # Demo workout assembly
-  storage/              # Persistence abstraction
+  features/progress/    # Skills, streak, achievements
+  features/workout/     # Daily mix + session store
+  storage/              # Persistence (schema v3)
   theme/                # Design tokens
-  utils/                # Deterministic PRNG
-tests/                  # Unit + stress tests
+  utils/                # Deterministic PRNG, haptics
+tests/                  # Unit + smoke
+tests/audit/            # Heavy stress / oracle audits
 docs/                   # Architecture docs
 ```
 
@@ -72,20 +79,23 @@ UI и puzzle-domain разделены: экраны не содержат ло�
 - Контракт генератора + `generatorId` / `version`
 - Validator перед выдачей задачи в UI
 - Universal `PuzzleRunner` + renderers по типу взаимодействия
+- Matchsticks: tap-to-move, seven-segment, reverse generator, independent oracle
 
 Подробности: [docs/PUZZLE_ENGINE.md](docs/PUZZLE_ENGINE.md)
 
-## Demo / Daily
+## Daily / Practice
 
-На вкладке **Сегодня** — полноценная Daily Workout из **10** задач (детерминированная на календарный день + profile seed).
+На вкладке **Сегодня** — Daily Workout из **10** задач (день + profile seed), до 7 категорий включая спички.
 
 На вкладке **Играть** — practice по категориям (10 задач, без влияния на streak).
 
-Подробности движка: [docs/PUZZLE_ENGINE.md](docs/PUZZLE_ENGINE.md) · Storage: [docs/STORAGE.md](docs/STORAGE.md)
+На вкладке **Прогресс** — навыки, активность, достижения.
 
-## Что сознательно не входит в Phase 0–1
+Подробности: [docs/PUZZLE_ENGINE.md](docs/PUZZLE_ENGINE.md) · Storage: [docs/STORAGE.md](docs/STORAGE.md)
 
-Реклама (РСЯ), AppMetrica, interstitial/rewarded, production signing, облако, аккаунты, push, покупки, полноценный daily adaptive workout.
+## Что сознательно отложено
+
+Реклама (РСЯ), AppMetrica SDK, interstitial/rewarded, production signing, облако, аккаунты, push, покупки, монеты/магазин.
 
 ## Лицензия
 

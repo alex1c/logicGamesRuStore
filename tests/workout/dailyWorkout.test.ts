@@ -60,6 +60,41 @@ describe('daily workout determinism', () => {
 		expect(Math.max(...counts)).toBeLessThanOrEqual(2)
 	})
 
+	it('mix uses ≥5 categories and never 3 identical in a row', () => {
+		for (let day = 1; day <= 40; day += 1) {
+			const date = `2026-03-${String(day).padStart(2, '0')}`
+			const workout = createDailyWorkout({
+				workoutDate: date,
+				profileSeed: profileSeed + day,
+				skills,
+			})
+			const categories = workout.puzzles.map((p) => p.category)
+			expect(new Set(categories).size).toBeGreaterThanOrEqual(5)
+			for (let i = 2; i < categories.length; i += 1) {
+				expect(
+					categories[i] === categories[i - 1] &&
+						categories[i] === categories[i - 2],
+				).toBe(false)
+			}
+		}
+	})
+
+	it('can include matchsticks in the daily mix over a month', () => {
+		let sawMatchsticks = false
+		for (let day = 1; day <= 31; day += 1) {
+			const workout = createDailyWorkout({
+				workoutDate: `2026-07-${String(day).padStart(2, '0')}`,
+				profileSeed,
+				skills,
+			})
+			if (workout.puzzles.some((p) => p.category === 'matchsticks')) {
+				sawMatchsticks = true
+				break
+			}
+		}
+		expect(sawMatchsticks).toBe(true)
+	})
+
 	it('year boundary dates produce valid workouts', () => {
 		for (const date of ['2025-12-31', '2026-01-01', '2024-02-29']) {
 			const workout = createDailyWorkout({

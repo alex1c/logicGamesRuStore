@@ -25,6 +25,10 @@ describe('Codex independent generator audit', () => {
 	jest.setTimeout(120_000)
 
 	for (const generator of ALL_GENERATORS) {
+		// Matchstick oracle stress lives in tests/audit/matchsticksAudit.test.ts
+		if (generator.generatorId.startsWith('matchsticks.')) {
+			continue
+		}
 		it(`${generator.generatorId}: 10,000 seeds across every difficulty`, () => {
 			for (let seed = 0; seed < SEEDS_PER_GENERATOR; seed += 1) {
 				for (const difficulty of DIFFICULTIES) {

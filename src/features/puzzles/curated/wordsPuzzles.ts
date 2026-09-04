@@ -76,20 +76,20 @@ export const CURATED_WORDS_PUZZLES: Puzzle[] = [
 	mc({
 		id: 'curated.words.p01',
 		difficulty: 1,
-		prompt: 'Кот относится к кошке как пёс к…',
+		prompt: 'Бык относится к корове как петух к…',
 		options: [
-			{ id: 'a', label: 'собаке' },
-			{ id: 'b', label: 'коту' },
-			{ id: 'c', label: 'щенку' },
-			{ id: 'd', label: 'хвосту' },
+			{ id: 'a', label: 'курице' },
+			{ id: 'b', label: 'цыплёнку' },
+			{ id: 'c', label: 'индюку' },
+			{ id: 'd', label: 'яйцу' },
 		],
 		answer: 'a',
 		hints: [
-			{ level: 1, text: 'Сравните пару «самец — самка».' },
-			{ level: 2, text: 'Кот — самец, кошка — самка; пёс — самец, …' },
+			{ level: 1, text: 'Пара «самец — самка».' },
+			{ level: 2, text: 'Бык — самец, корова — самка; петух — самец, …' },
 		],
 		explanation:
-			'Кот и кошка — самец и самка одного вида. Пёс — самец, парная самка — собака.',
+			'Бык и корова — самец и самка. Петух — самец, парная самка — курица.',
 		tags: ['curated', 'words', 'analogy'],
 	}),
 	mc({
@@ -100,7 +100,7 @@ export const CURATED_WORDS_PUZZLES: Puzzle[] = [
 			{ id: 'a', label: 'луне' },
 			{ id: 'b', label: 'тьме' },
 			{ id: 'c', label: 'солнцу' },
-			{ id: 'd', label: 'утром' },
+			{ id: 'd', label: 'утру' },
 		],
 		answer: 'b',
 		hints: [
@@ -135,7 +135,7 @@ export const CURATED_WORDS_PUZZLES: Puzzle[] = [
 		difficulty: 3,
 		prompt: 'Автор относится к книге как композитор к…',
 		options: [
-			{ id: 'a', label: 'нотам' },
+			{ id: 'a', label: 'дирижёру' },
 			{ id: 'b', label: 'музыке' },
 			{ id: 'c', label: 'оркестру' },
 			{ id: 'd', label: 'концерту' },
@@ -401,7 +401,7 @@ export const CURATED_WORDS_PUZZLES: Puzzle[] = [
 		difficulty: 1,
 		prompt: 'Какое слово является антонимом к «холодный»?',
 		options: [
-			{ id: 'a', label: 'тёплый' },
+			{ id: 'a', label: 'горячий' },
 			{ id: 'b', label: 'мокрый' },
 			{ id: 'c', label: 'тихий' },
 			{ id: 'd', label: 'длинный' },
@@ -409,10 +409,9 @@ export const CURATED_WORDS_PUZZLES: Puzzle[] = [
 		answer: 'a',
 		hints: [
 			{ level: 1, text: 'Антоним — слово с противоположным смыслом.' },
-			{ level: 2, text: 'Противоположность холоду — тепло.' },
+			{ level: 2, text: 'Противоположность холоду — жар, горячее.' },
 		],
-		explanation:
-			'Антоним к «холодный» — «тёплый» (противоположная температура).',
+		explanation: 'Антоним к «холодный» — «горячий».',
 		tags: ['curated', 'words', 'relation'],
 	}),
 	mc({
@@ -599,7 +598,10 @@ export const CURATED_WORDS_PUZZLES: Puzzle[] = [
 		acceptedAnswers: ['океан'],
 		hints: [
 			{ level: 1, text: 'Не пресное озеро.' },
-			{ level: 2, text: 'Короткое слово из четырёх букв.' },
+			{
+				level: 2,
+				text: 'Чаще всего отвечают «море»; допустим и «океан».',
+			},
 		],
 		explanation:
 			'Большой солёный водоём — море (также допустим «океан»).',

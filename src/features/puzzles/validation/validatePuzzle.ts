@@ -1,4 +1,5 @@
 import type {
+	MatchstickPuzzle,
 	MultipleChoicePuzzle,
 	NumericInputPuzzle,
 	Puzzle,
@@ -282,6 +283,73 @@ function validateTapTarget(
 	}
 }
 
+function validateMatchstick(
+	puzzle: MatchstickPuzzle,
+	issues: ValidationIssue[],
+): void {
+	if (!puzzle.state || !Array.isArray(puzzle.state.sticks) || !Array.isArray(puzzle.state.cells)) {
+		issues.push({
+			code: 'INVALID_MATCHSTICK_STATE',
+			message: 'matchstick state with cells and sticks is required',
+			path: 'state',
+		})
+		return
+	}
+	if (puzzle.state.cells.length < 3) {
+		issues.push({
+			code: 'MATCHSTICK_CELLS_TOO_FEW',
+			message: 'expected equation cells',
+			path: 'state.cells',
+		})
+	}
+	const stickIds = new Set<string>()
+	let active = 0
+	for (const [index, stick] of puzzle.state.sticks.entries()) {
+		requireNonEmptyString(stick.id, `state.sticks[${index}].id`, issues)
+		requireNonEmptyString(stick.cellId, `state.sticks[${index}].cellId`, issues)
+		requireNonEmptyString(
+			stick.segmentKey,
+			`state.sticks[${index}].segmentKey`,
+			issues,
+		)
+		if (stickIds.has(stick.id)) {
+			issues.push({
+				code: 'DUPLICATE_STICK_ID',
+				message: `duplicate stick id: ${stick.id}`,
+				path: `state.sticks[${index}].id`,
+			})
+		}
+		stickIds.add(stick.id)
+		if (stick.active) {
+			active += 1
+		}
+	}
+	if (active < 4) {
+		issues.push({
+			code: 'MATCHSTICK_TOO_FEW_ACTIVE',
+			message: 'too few active sticks',
+			path: 'state.sticks',
+		})
+	}
+	requireNonEmptyString(puzzle.answer, 'answer', issues)
+	if (!/^.+->.+$/.test(puzzle.answer)) {
+		issues.push({
+			code: 'INVALID_MATCHSTICK_ANSWER',
+			message: 'answer must be fromId->toId',
+			path: 'answer',
+		})
+	} else {
+		const [fromId, toId] = puzzle.answer.split('->')
+		if (!stickIds.has(fromId) || !stickIds.has(toId)) {
+			issues.push({
+				code: 'MATCHSTICK_ANSWER_UNKNOWN_STICK',
+				message: 'answer references unknown stick ids',
+				path: 'answer',
+			})
+		}
+	}
+}
+
 /**
  * Validate a puzzle before it reaches the UI.
  * Returns structured issues — never throws for content problems.
@@ -323,6 +391,9 @@ export function validatePuzzle(
 			break
 		case 'tap_target':
 			validateTapTarget(puzzle, issues)
+			break
+		case 'matchstick_move':
+			validateMatchstick(puzzle, issues)
 			break
 		default: {
 			const _exhaustive: never = puzzle

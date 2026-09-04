@@ -2,12 +2,11 @@ import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SurfaceCard } from '@/src/components/ui'
-import {
-	PLAYABLE_CATEGORIES,
-} from '@/src/features/workout/createDailyWorkout'
+import { PLAYABLE_CATEGORIES } from '@/src/features/workout/createDailyWorkout'
 import { startPracticeSession } from '@/src/features/workout/sessionStore'
 import { CATEGORY_LABELS, type PuzzleCategory } from '@/src/features/puzzles/types'
 import { colors, elevation, radius, spacing, typography } from '@/src/theme'
+import { hapticSelect } from '@/src/utils/haptics'
 
 const DESCRIPTIONS: Record<PuzzleCategory, string> = {
 	logic: 'Короткие задачи на рассуждение.',
@@ -16,7 +15,7 @@ const DESCRIPTIONS: Record<PuzzleCategory, string> = {
 	attention: 'Найдите отличающийся символ.',
 	odd_one_out: 'Определите элемент, который не подходит.',
 	words: 'Аналогии и словесные задачи.',
-	matchsticks: 'Скоро',
+	matchsticks: 'Переместите одну спичку.',
 }
 
 const ICONS: Record<PuzzleCategory, string> = {
@@ -34,6 +33,7 @@ export default function PlayScreen() {
 	const insets = useSafeAreaInsets()
 
 	const handleCategory = async (category: PuzzleCategory) => {
+		void hapticSelect()
 		await startPracticeSession(category)
 		router.push('/workout/play')
 	}
@@ -64,7 +64,9 @@ export default function PlayScreen() {
 				>
 					<SurfaceCard style={styles.card}>
 						<View style={styles.cardRow}>
-							<Text style={styles.icon}>{ICONS[category]}</Text>
+							<View style={styles.iconWrap}>
+								<Text style={styles.icon}>{ICONS[category]}</Text>
+							</View>
 							<View style={styles.cardText}>
 								<Text style={styles.cardTitle}>
 									{CATEGORY_LABELS[category]}
@@ -75,17 +77,6 @@ export default function PlayScreen() {
 					</SurfaceCard>
 				</Pressable>
 			))}
-
-			<SurfaceCard style={[styles.card, styles.soonCard]}>
-				<View style={styles.cardRow}>
-					<Text style={styles.icon}>｜</Text>
-					<View style={styles.cardText}>
-						<Text style={styles.cardTitle}>Спички</Text>
-						<Text style={styles.cardBody}>Скоро</Text>
-					</View>
-					<Text style={styles.soonBadge}>Скоро</Text>
-				</View>
-			</SurfaceCard>
 		</ScrollView>
 	)
 }
@@ -100,19 +91,17 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.sm,
 	},
 	card: { ...elevation.sm },
-	soonCard: { opacity: 0.72 },
 	cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-	icon: { fontSize: 28, width: 36, textAlign: 'center' },
+	iconWrap: {
+		width: 48,
+		height: 48,
+		borderRadius: radius.md,
+		backgroundColor: colors.light.primaryMuted,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	icon: { fontSize: 24 },
 	cardText: { flex: 1, gap: 2 },
 	cardTitle: { ...typography.subtitle, color: colors.light.textPrimary },
 	cardBody: { ...typography.caption, color: colors.light.textSecondary },
-	soonBadge: {
-		...typography.label,
-		color: colors.light.textTertiary,
-		backgroundColor: colors.light.surfaceMuted,
-		paddingHorizontal: spacing.sm,
-		paddingVertical: spacing.xxs,
-		borderRadius: radius.pill,
-		overflow: 'hidden',
-	},
 })

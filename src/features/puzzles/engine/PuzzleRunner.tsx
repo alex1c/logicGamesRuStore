@@ -18,6 +18,11 @@ import {
 	touchTarget,
 	typography,
 } from '@/src/theme'
+import {
+	hapticCorrect,
+	hapticSelect,
+	hapticWrong,
+} from '@/src/utils/haptics'
 
 export type PuzzleRunnerResult = {
 	isCorrect: boolean
@@ -68,6 +73,11 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 		const result = checkAnswer(puzzle, selectedValue)
 		setIsCorrect(result.isCorrect)
 		setPhase('feedback')
+		if (result.isCorrect) {
+			void hapticCorrect()
+		} else {
+			void hapticWrong()
+		}
 	}
 
 	const handleHint = () => {
@@ -77,13 +87,10 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 		hintLevelRef.current += 1
 		setHintLevelShown(hintLevelRef.current)
 		setHintsUsed((n) => n + 1)
+		void hapticSelect()
 	}
 
 	const handleReveal = () => {
-		if (!confirmReveal) {
-			setConfirmReveal(true)
-			return
-		}
 		setRevealedSolution(true)
 		setIsCorrect(false)
 		setPhase('feedback')
@@ -154,7 +161,34 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 				</View>
 			)}
 
-			{phase === 'answering' && (
+					{phase === 'answering' && confirmReveal && (
+						<View style={styles.confirmBox}>
+							<Text style={styles.confirmTitle}>Показать решение?</Text>
+							<Text style={styles.confirmBody}>
+								После этого задача будет считаться нерешённой.
+							</Text>
+							<View style={styles.secondaryRow}>
+								<Pressable
+									accessibilityRole="button"
+									accessibilityLabel="Отмена"
+									onPress={() => setConfirmReveal(false)}
+									style={styles.secondaryBtn}
+								>
+									<Text style={styles.secondaryBtnText}>Отмена</Text>
+								</Pressable>
+								<Pressable
+									accessibilityRole="button"
+									accessibilityLabel="Показать"
+									onPress={handleReveal}
+									style={[styles.secondaryBtn, styles.secondaryBtnWarn]}
+								>
+									<Text style={styles.secondaryBtnText}>Показать</Text>
+								</Pressable>
+							</View>
+						</View>
+					)}
+
+					{phase === 'answering' && !confirmReveal && (
 				<View style={styles.actions}>
 					<Pressable
 						accessibilityRole="button"
@@ -186,25 +220,18 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 						</Pressable>
 						<Pressable
 							accessibilityRole="button"
-							accessibilityLabel={
-								confirmReveal
-									? 'Подтвердить показ решения'
-									: 'Показать решение'
-							}
-							onPress={handleReveal}
+							accessibilityLabel="Показать решение"
+							onPress={() => setConfirmReveal(true)}
 							style={({ pressed }) => [
 								styles.secondaryBtn,
-								confirmReveal && styles.secondaryBtnWarn,
 								pressed && styles.pressed,
 							]}
 						>
-							<Text style={styles.secondaryBtnText}>
-								{confirmReveal ? 'Показать решение?' : 'Показать решение'}
-							</Text>
+							<Text style={styles.secondaryBtnText}>Показать решение</Text>
 						</Pressable>
 					</View>
 				</View>
-			)}
+					)}
 
 			{phase === 'feedback' && (
 				<View style={styles.feedbackBlock}>
@@ -225,7 +252,7 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 								? 'Решение открыто'
 								: isCorrect
 									? 'Верно'
-									: 'Неверно'}
+									: 'Не совсем'}
 						</Text>
 					</View>
 
@@ -313,6 +340,20 @@ const styles = StyleSheet.create({
 	hintText: {
 		...typography.body,
 		color: colors.light.textPrimary,
+	},
+	confirmBox: {
+		backgroundColor: colors.light.warningMuted,
+		borderRadius: radius.md,
+		padding: spacing.md,
+		gap: spacing.sm,
+	},
+	confirmTitle: {
+		...typography.subtitle,
+		color: colors.light.textPrimary,
+	},
+	confirmBody: {
+		...typography.body,
+		color: colors.light.textSecondary,
 	},
 	actions: {
 		gap: spacing.sm,

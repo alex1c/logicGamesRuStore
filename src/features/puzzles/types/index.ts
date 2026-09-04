@@ -23,6 +23,7 @@ export type InteractionType =
 	| 'select_item'
 	| 'text_input'
 	| 'tap_target'
+	| 'matchstick_move'
 
 /** Progressive hints; level 1 is milder than level 2. */
 export type PuzzleHint = {
@@ -114,12 +115,35 @@ export type TapTargetPuzzle = PuzzleBase & {
 	answer: string
 }
 
+/** Matchstick equation puzzle — answer is `fromId->toId`. */
+export type MatchstickPuzzle = PuzzleBase & {
+	interactionType: 'matchstick_move'
+	/** Initial broken equation state. */
+	state: {
+		cells: {
+			id: string
+			kind: 'digit' | 'operator'
+			role: 'left' | 'op' | 'right' | 'eq' | 'result'
+		}[]
+		sticks: {
+			id: string
+			cellId: string
+			segmentKey: string
+			active: boolean
+		}[]
+	}
+	answer: string
+	/** Alternate encodings of the unique solution move, if any. */
+	acceptedMoves?: string[]
+}
+
 export type Puzzle =
 	| MultipleChoicePuzzle
 	| NumericInputPuzzle
 	| SelectItemPuzzle
 	| TextInputPuzzle
 	| TapTargetPuzzle
+	| MatchstickPuzzle
 
 /** Human-readable Russian labels for categories. */
 export const CATEGORY_LABELS: Record<PuzzleCategory, string> = {
