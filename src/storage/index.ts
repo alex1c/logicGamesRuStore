@@ -1,6 +1,6 @@
 /**
- * Versioned app persistence (schema v3).
- * Demo schema v1 sessions are dropped safely; v2 progress migrates into v3.
+ * Versioned app persistence (schema v4).
+ * v1 demo dropped; v2→v3 achievements; v3→v4 ad policy counters.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -11,10 +11,14 @@ import type {
 	AchievementStats,
 	UnlockedAchievement,
 } from '@/src/features/progress/achievements'
+import {
+	EMPTY_INTERSTITIAL_POLICY,
+	type InterstitialPolicyState,
+} from '@/src/monetization/policy'
 import type { LocalDateString } from '@/src/utils/localDate'
 import { createRng } from '@/src/utils/prng'
 
-export const STORAGE_SCHEMA_VERSION = 3 as const
+export const STORAGE_SCHEMA_VERSION = 4 as const
 
 const KEYS = {
 	meta: '@fm/meta',
@@ -28,11 +32,13 @@ const KEYS = {
 	recentPuzzles: '@fm/recentPuzzles',
 	achievements: '@fm/achievements',
 	achievementStats: '@fm/achievementStats',
+	adPolicy: '@fm/adPolicy',
 	/** Legacy Phase 1 / Codex demo key — cleared on migrate. */
 	legacyDemoWorkout: '@fm/demoWorkout',
 	legacyOnboarding: '@fm/onboardingVersion',
 	legacyStreak: '@fm/streakDays',
 } as const
+
 
 export type AppSettings = {
 	theme: 'light' | 'dark' | 'system'
@@ -77,7 +83,7 @@ export type PuzzleResultPersisted = {
 }
 
 export type ActiveSessionPersisted = {
-	schemaVersion: 2 | 3
+	schemaVersion: 2 | 3 | 4
 	sessionId: string
 	sessionType: SessionType
 	/** Present for daily sessions. */
@@ -99,7 +105,7 @@ export type ActiveSessionPersisted = {
 }
 
 export type DailyCompletionPersisted = {
-	schemaVersion: 2 | 3
+	schemaVersion: 2 | 3 | 4
 	workoutDate: LocalDateString
 	sessionId: string
 	correctCount: number
@@ -158,8 +164,8 @@ export function resetStorageMigrationFlagForTests(): void {
 }
 
 /**
- * Ensure storage is on schema v3. Safe to call repeatedly.
- * v1 demo sessions dropped; v2 progress data preserved into v3.
+ * Ensure storage is on schema v4. Safe to call repeatedly.
+ * v1 demo dropped; v2/v3 progress preserved; v4 adds ad policy.
  */
 export async function ensureStorageMigrated(): Promise<void> {
 	if (migrated) {
@@ -210,15 +216,23 @@ export async function ensureStorageMigrated(): Promise<void> {
 		await writeJson(KEYS.achievementStats, emptyAchievementStats())
 	}
 
-	// Active sessions from v2 remain compatible (same shape + schemaVersion field).
+	// v3 → v4: interstitial ad policy counters.
+	const adPolicy = await readJson<InterstitialPolicyState>(KEYS.adPolicy)
+	if (!adPolicy) {
+		await writeJson(KEYS.adPolicy, { ...EMPTY_INTERSTITIAL_POLICY })
+	}
+
 	const active = await readJson<ActiveSessionPersisted>(KEYS.activeSession)
-	if (active && active.schemaVersion === 2) {
+	if (
+		active &&
+		(active.schemaVersion === 2 || active.schemaVersion === 3)
+	) {
 		active.schemaVersion = STORAGE_SCHEMA_VERSION
 		await writeJson(KEYS.activeSession, active)
 	}
 
 	const daily = await readJson<DailyCompletionPersisted>(KEYS.dailyCompletion)
-	if (daily && daily.schemaVersion === 2) {
+	if (daily && (daily.schemaVersion === 2 || daily.schemaVersion === 3)) {
 		daily.schemaVersion = STORAGE_SCHEMA_VERSION
 		await writeJson(KEYS.dailyCompletion, daily)
 	}
@@ -351,7 +365,9 @@ export async function getActiveSession(): Promise<ActiveSessionPersisted | null>
 	const value = await readJson<ActiveSessionPersisted>(KEYS.activeSession)
 	if (
 		!value ||
-		(value.schemaVersion !== 2 && value.schemaVersion !== 3) ||
+		(value.schemaVersion !== 2 &&
+			value.schemaVersion !== 3 &&
+			value.schemaVersion !== 4) ||
 		!Array.isArray(value.plan) ||
 		!Array.isArray(value.results)
 	) {
@@ -378,7 +394,9 @@ export async function getDailyCompletion(
 	const value = await readJson<DailyCompletionPersisted>(KEYS.dailyCompletion)
 	if (
 		!value ||
-		(value.schemaVersion !== 2 && value.schemaVersion !== 3) ||
+		(value.schemaVersion !== 2 &&
+			value.schemaVersion !== 3 &&
+			value.schemaVersion !== 4) ||
 		value.workoutDate !== workoutDate
 	) {
 		return null
@@ -391,7 +409,9 @@ export async function getAnyDailyCompletion(): Promise<DailyCompletionPersisted 
 	const value = await readJson<DailyCompletionPersisted>(KEYS.dailyCompletion)
 	if (
 		!value ||
-		(value.schemaVersion !== 2 && value.schemaVersion !== 3)
+		(value.schemaVersion !== 2 &&
+			value.schemaVersion !== 3 &&
+			value.schemaVersion !== 4)
 	) {
 		return null
 	}
@@ -462,6 +482,36 @@ export async function getProgressAggregates(): Promise<ProgressAggregates> {
 		puzzlesSolved,
 		puzzlesCorrect,
 	}
+}
+
+export async function getAdPolicyState(): Promise<InterstitialPolicyState> {
+	await ensureStorageMigrated()
+	const stored = await readJson<InterstitialPolicyState>(KEYS.adPolicy)
+	if (!stored) {
+		return { ...EMPTY_INTERSTITIAL_POLICY }
+	}
+	return {
+		completedSessions: Number.isFinite(stored.completedSessions)
+			? Math.max(0, stored.completedSessions)
+			: 0,
+		sessionsSinceLastShow: Number.isFinite(stored.sessionsSinceLastShow)
+			? Math.max(0, stored.sessionsSinceLastShow)
+			: 0,
+		lastShownAt:
+			stored.lastShownAt == null || !Number.isFinite(stored.lastShownAt)
+				? null
+				: stored.lastShownAt,
+		processedSessionIds: Array.isArray(stored.processedSessionIds)
+			? stored.processedSessionIds.filter((id) => typeof id === 'string')
+			: [],
+	}
+}
+
+export async function saveAdPolicyState(
+	state: InterstitialPolicyState,
+): Promise<void> {
+	await ensureStorageMigrated()
+	await writeJson(KEYS.adPolicy, state)
 }
 
 /** @deprecated Use getStreakState — kept for transitional UI. */

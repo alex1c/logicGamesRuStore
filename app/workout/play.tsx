@@ -74,6 +74,7 @@ export default function WorkoutPlayScreen() {
 				puzzle={puzzle}
 				index={index}
 				total={total}
+				sessionId={live.session.id}
 				onComplete={(result) => {
 					const next = recordPuzzleResult({
 						isCorrect: result.isCorrect,

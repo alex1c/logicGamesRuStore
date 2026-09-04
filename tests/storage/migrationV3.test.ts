@@ -21,7 +21,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 	}),
 }))
 
-describe('storage migration v2 → v3', () => {
+describe('storage migration v2 → v4', () => {
 	beforeEach(() => {
 		mockMemory.clear()
 		resetStorageMigrationFlagForTests()
@@ -85,14 +85,15 @@ describe('storage migration v2 → v3', () => {
 		expect(stats.playedCategories).toEqual([])
 
 		const active = JSON.parse(mockMemory.get('@fm/activeSession')!)
-		expect(active.schemaVersion).toBe(3)
+		expect(active.schemaVersion).toBe(4)
 
 		expect(mockMemory.get('@fm/recentPuzzles')).toContain('matchsticks')
+		expect(mockMemory.get('@fm/adPolicy')).toBeTruthy()
 		expect(AsyncStorage.setItem).toHaveBeenCalled()
 	})
 
 	it('is idempotent on repeated migrate', async () => {
-		mockMemory.set('@fm/meta', JSON.stringify({ schemaVersion: 3 }))
+		mockMemory.set('@fm/meta', JSON.stringify({ schemaVersion: 4 }))
 		mockMemory.set(
 			'@fm/achievements',
 			JSON.stringify([{ id: 'first_workout', unlockedAt: 1 }]),

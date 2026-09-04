@@ -23,6 +23,7 @@ import {
 	hapticSelect,
 	hapticWrong,
 } from '@/src/utils/haptics'
+import { requestRewardedHint2 } from '@/src/monetization/rewarded/controller'
 
 export type PuzzleRunnerResult = {
 	isCorrect: boolean
@@ -35,6 +36,7 @@ type Props = {
 	/** 1-based index for progress display. */
 	index: number
 	total: number
+	sessionId: string
 	onComplete: (result: PuzzleRunnerResult) => void
 }
 
@@ -42,8 +44,15 @@ type Phase = 'answering' | 'feedback'
 
 /**
  * Universal puzzle shell: prompt, interaction renderer, hints, explanation, next.
+ * No permanent ads — Puzzle Runner stays clean.
  */
-export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
+export function PuzzleRunner({
+	puzzle,
+	index,
+	total,
+	sessionId,
+	onComplete,
+}: Props) {
 	const [selectedValue, setSelectedValue] = useState<string | null>(null)
 	const [phase, setPhase] = useState<Phase>('answering')
 	const [isCorrect, setIsCorrect] = useState(false)
@@ -51,8 +60,10 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 	const [revealedSolution, setRevealedSolution] = useState(false)
 	const [hintsUsed, setHintsUsed] = useState(0)
 	const [confirmReveal, setConfirmReveal] = useState(false)
+	const [rewardBusy, setRewardBusy] = useState(false)
 	const completionSent = useRef(false)
 	const hintLevelRef = useRef(0)
+	const rewardLock = useRef(false)
 
 	const canSubmit = useMemo(() => {
 		if (selectedValue == null) {
@@ -80,7 +91,7 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 		}
 	}
 
-	const handleHint = () => {
+	const revealNextHint = () => {
 		if (hintLevelRef.current >= sortedHints.length) {
 			return
 		}
@@ -88,6 +99,42 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 		setHintLevelShown(hintLevelRef.current)
 		setHintsUsed((n) => n + 1)
 		void hapticSelect()
+	}
+
+	/** Hint 1 is always free. */
+	const handleFreeHint = () => {
+		if (hintLevelRef.current !== 0) {
+			return
+		}
+		revealNextHint()
+	}
+
+	/** Hint 2+ may use rewarded; unavailable → free fallback. */
+	const handleRewardedHint = async () => {
+		if (rewardLock.current || hintLevelRef.current !== 1) {
+			return
+		}
+		if (sortedHints.length < 2) {
+			return
+		}
+		rewardLock.current = true
+		setRewardBusy(true)
+		try {
+			const result = await requestRewardedHint2({
+				sessionId,
+				puzzleId: puzzle.id,
+				puzzleIndex: index - 1,
+			})
+			if (
+				result.status === 'rewarded' ||
+				result.status === 'fallback'
+			) {
+				revealNextHint()
+			}
+		} finally {
+			setRewardBusy(false)
+			// Keep lock for this puzzle so rapid taps cannot re-request.
+		}
 	}
 
 	const handleReveal = () => {
@@ -111,6 +158,10 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 
 	const locked = phase === 'feedback'
 	const showExplanation = phase === 'feedback'
+	const hasHint2 = sortedHints.length >= 2
+	const showFreeHint = hintLevelShown === 0 && sortedHints.length > 0
+	const showRewardedHint = hintLevelShown === 1 && hasHint2
+
 
 	return (
 		<ScrollView
@@ -205,19 +256,38 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 					</Pressable>
 
 					<View style={styles.secondaryRow}>
-						<Pressable
-							accessibilityRole="button"
-							accessibilityLabel="Показать подсказку"
-							disabled={hintLevelShown >= sortedHints.length}
-							onPress={handleHint}
-							style={({ pressed }) => [
-								styles.secondaryBtn,
-								hintLevelShown >= sortedHints.length && styles.btnDisabled,
-								pressed && styles.pressed,
-							]}
-						>
-							<Text style={styles.secondaryBtnText}>Подсказка</Text>
-						</Pressable>
+						{showFreeHint ? (
+							<Pressable
+								accessibilityRole="button"
+								accessibilityLabel="Показать подсказку"
+								onPress={handleFreeHint}
+								style={({ pressed }) => [
+									styles.secondaryBtn,
+									pressed && styles.pressed,
+								]}
+							>
+								<Text style={styles.secondaryBtnText}>Подсказка</Text>
+							</Pressable>
+						) : null}
+						{showRewardedHint ? (
+							<Pressable
+								accessibilityRole="button"
+								accessibilityLabel="Ещё подсказка"
+								disabled={rewardBusy}
+								onPress={() => {
+									void handleRewardedHint()
+								}}
+								style={({ pressed }) => [
+									styles.secondaryBtn,
+									rewardBusy && styles.btnDisabled,
+									pressed && styles.pressed,
+								]}
+							>
+								<Text style={styles.secondaryBtnText}>
+									{rewardBusy ? 'Загрузка…' : 'Ещё подсказка'}
+								</Text>
+							</Pressable>
+						) : null}
 						<Pressable
 							accessibilityRole="button"
 							accessibilityLabel="Показать решение"

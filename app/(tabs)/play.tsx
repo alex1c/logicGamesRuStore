@@ -7,6 +7,7 @@ import { startPracticeSession } from '@/src/features/workout/sessionStore'
 import { CATEGORY_LABELS, type PuzzleCategory } from '@/src/features/puzzles/types'
 import { colors, elevation, radius, spacing, typography } from '@/src/theme'
 import { hapticSelect } from '@/src/utils/haptics'
+import { BannerSlot } from '@/src/monetization/banner/BannerSlot'
 
 const DESCRIPTIONS: Record<PuzzleCategory, string> = {
 	logic: 'Короткие задачи на рассуждение.',
@@ -52,30 +53,32 @@ export default function PlayScreen() {
 				на дневную серию.
 			</Text>
 
-			{PLAYABLE_CATEGORIES.map((category) => (
-				<Pressable
-					key={category}
-					accessibilityRole="button"
-					accessibilityLabel={CATEGORY_LABELS[category]}
-					onPress={() => {
-						void handleCategory(category)
-					}}
-					style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
-				>
-					<SurfaceCard style={styles.card}>
-						<View style={styles.cardRow}>
-							<View style={styles.iconWrap}>
-								<Text style={styles.icon}>{ICONS[category]}</Text>
+			{PLAYABLE_CATEGORIES.map((category, index) => (
+				<View key={category}>
+					{index === 4 ? <BannerSlot placement="play" /> : null}
+					<Pressable
+						accessibilityRole="button"
+						accessibilityLabel={CATEGORY_LABELS[category]}
+						onPress={() => {
+							void handleCategory(category)
+						}}
+						style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
+					>
+						<SurfaceCard style={styles.card}>
+							<View style={styles.cardRow}>
+								<View style={styles.iconWrap}>
+									<Text style={styles.icon}>{ICONS[category]}</Text>
+								</View>
+								<View style={styles.cardText}>
+									<Text style={styles.cardTitle}>
+										{CATEGORY_LABELS[category]}
+									</Text>
+									<Text style={styles.cardBody}>{DESCRIPTIONS[category]}</Text>
+								</View>
 							</View>
-							<View style={styles.cardText}>
-								<Text style={styles.cardTitle}>
-									{CATEGORY_LABELS[category]}
-								</Text>
-								<Text style={styles.cardBody}>{DESCRIPTIONS[category]}</Text>
-							</View>
-						</View>
-					</SurfaceCard>
-				</Pressable>
+						</SurfaceCard>
+					</Pressable>
+				</View>
 			))}
 		</ScrollView>
 	)

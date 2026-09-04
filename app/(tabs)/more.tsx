@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import {
+	Linking,
+	ScrollView,
+	StyleSheet,
+	Switch,
+	Text,
+	Pressable,
+	View,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SurfaceCard } from '@/src/components/ui'
 import {
@@ -8,6 +16,7 @@ import {
 	saveSettings,
 	type AppSettings,
 } from '@/src/storage'
+import { APP_IDENTITY } from '@/src/monetization/config'
 import { colors, spacing, typography } from '@/src/theme'
 
 export default function MoreScreen() {
@@ -21,6 +30,26 @@ export default function MoreScreen() {
 	const update = async (patch: Partial<AppSettings>) => {
 		const next = await saveSettings(patch)
 		setSettings(next)
+	}
+
+	const openMail = async () => {
+		const url = `mailto:${APP_IDENTITY.supportEmail}`
+		try {
+			const can = await Linking.canOpenURL(url)
+			if (can) {
+				await Linking.openURL(url)
+			}
+		} catch {
+			// Missing mail client must not crash.
+		}
+	}
+
+	const openSite = async () => {
+		try {
+			await Linking.openURL(APP_IDENTITY.developerWebsite)
+		} catch {
+			// ignore
+		}
 	}
 
 	return (
@@ -38,7 +67,7 @@ export default function MoreScreen() {
 				<View style={styles.row}>
 					<View style={styles.rowText}>
 						<Text style={styles.rowTitle}>Вибрация</Text>
-						<Text style={styles.rowBody}>Отклик при ответах (подготовка)</Text>
+						<Text style={styles.rowBody}>Лёгкий отклик при ответах</Text>
 					</View>
 					<Switch
 						accessibilityLabel="Вибрация"
@@ -60,11 +89,29 @@ export default function MoreScreen() {
 			</SurfaceCard>
 
 			<SurfaceCard>
-				<Text style={styles.rowTitle}>О приложении</Text>
+				<Text style={styles.rowTitle}>{APP_IDENTITY.name}</Text>
 				<Text style={styles.rowBody}>
-					Логические игры — короткие ежедневные тренировки для ума. Версия
-					1.1.0 · Phase 2. Не является IQ-тестом.
+					Логические задачи, головоломки и короткие ежедневные тренировки.
 				</Text>
+				<Text style={styles.meta}>Версия {APP_IDENTITY.version}</Text>
+				<Pressable
+					accessibilityRole="link"
+					accessibilityLabel="Написать в поддержку"
+					onPress={() => {
+						void openMail()
+					}}
+				>
+					<Text style={styles.link}>{APP_IDENTITY.supportEmail}</Text>
+				</Pressable>
+				<Pressable
+					accessibilityRole="link"
+					accessibilityLabel="Сайт разработчика"
+					onPress={() => {
+						void openSite()
+					}}
+				>
+					<Text style={styles.link}>{APP_IDENTITY.developerWebsite}</Text>
+				</Pressable>
 			</SurfaceCard>
 		</ScrollView>
 	)
@@ -88,4 +135,14 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.xxs,
 	},
 	rowBody: { ...typography.body, color: colors.light.textSecondary },
+	meta: {
+		...typography.caption,
+		color: colors.light.textTertiary,
+		marginTop: spacing.sm,
+	},
+	link: {
+		...typography.bodyStrong,
+		color: colors.light.primary,
+		marginTop: spacing.sm,
+	},
 })

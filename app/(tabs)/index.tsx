@@ -30,6 +30,8 @@ import {
 	typography,
 } from '@/src/theme'
 import { CATEGORY_LABELS } from '@/src/features/puzzles/types'
+import { BannerSlot } from '@/src/monetization/banner/BannerSlot'
+import { APP_IDENTITY } from '@/src/monetization/config'
 
 const CATEGORY_ICON: Record<string, string> = {
 	logic: '🧩',
@@ -122,14 +124,14 @@ export default function TodayScreen() {
 				{ paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.xl },
 			]}
 		>
-			<Text style={styles.kicker}>Логические игры</Text>
+			<Text style={styles.kicker}>{APP_IDENTITY.name}</Text>
 			<Text style={styles.title}>
 				{done ? 'Сегодня выполнено' : 'Сегодня'}
 			</Text>
 			<Text style={styles.subtitle}>
 				{done
 					? 'Дневная тренировка уже позади. Можно ещё немного попрактиковаться.'
-					: 'Короткая смешанная сессия — 10 задач без спешки.'}
+					: '10 задач · около 5 минут · каждый день — без спешки.'}
 			</Text>
 
 			{!done && (
@@ -185,6 +187,8 @@ export default function TodayScreen() {
 					Всего верных ответов: {state.puzzlesSolved}
 				</Text>
 			)}
+
+			<BannerSlot placement="today" />
 
 			{!done && (
 				<AppButton

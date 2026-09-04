@@ -24,6 +24,7 @@ import {
 import { CATEGORY_LABELS } from '@/src/features/puzzles/types'
 import { formatClock } from '@/src/utils/localDate'
 import { colors, radius, spacing, typography } from '@/src/theme'
+import { BannerSlot } from '@/src/monetization/banner/BannerSlot'
 
 export default function ProgressScreen() {
 	const router = useRouter()
@@ -173,6 +174,8 @@ export default function ProgressScreen() {
 						<Stat label="Серия" value={`${streak.current} дн.`} />
 						<Stat label="Лучшая серия" value={`${streak.best} дн.`} />
 					</SurfaceCard>
+
+					<BannerSlot placement="progress" />
 
 					<Text style={styles.section}>Последние тренировки</Text>
 					{history.slice(0, 8).map((item) => (

@@ -1,35 +1,45 @@
-# Логические игры / Игры разума
+# Головоломка дня
 
-Android-first приложение — сборник логических задач и коротких ежедневных тренировок мозга.
+Android-first приложение ForestMusic — логические задачи, головоломки и короткие ежедневные тренировки.
 
-Рабочее название продукта: **Логические игры**. Кодовое имя репозитория: `logicGamesRuStore` (ForestMusic family).
+Репозиторий: `logicGamesRuStore`. Package: `ru.forestmusic.logicgames`.
 
-Приложение **не** является IQ-тестом и не делает псевдонаучных заявлений.
+Приложение **не** является IQ-тестом и не делает медицинских или псевдонаучных заявлений.
+
+## Возможности
+
+- **7 категорий:** logic, math, sequence, attention, odd_one_out, words, matchsticks
+- **Daily Workout** — 10 задач ≈ 5 минут, день + локальный profile seed
+- Practice по категориям (без влияния на streak)
+- Adaptive difficulty / skills, streak, achievements
+- **Offline-first** — полный геймплей без сети
+- **Yandex Mobile Ads** — banner, interstitial, rewarded
+- **AppMetrica** — продуктовая аналитика
 
 ## Стек
 
-- Expo SDK 57
-- React Native 0.86
-- React 19
-- TypeScript (strict)
-- Expo Router
-- Jest + jest-expo
-- ESLint (eslint-config-expo)
-- AsyncStorage (минимальная persistence)
+- Expo SDK 57 · React Native 0.86 · React 19 · TypeScript (strict)
+- Expo Router · Jest · AsyncStorage
+- `yandex-mobile-ads` · `@appmetrica/react-native-analytics`
 
 Ориентир устройства: **Pixel_10 / API 37**.
 
-## Быстрый старт
+## Native build required
+
+Ads and AppMetrica need a **dev client / release native build**.  
+Expo Go is not a production path for this app.
+
+```bash
+npm install
+npx expo prebuild --platform android   # when native project needed
+npm run android
+```
+
+## Быстрый старт (JS / Metro)
 
 ```bash
 npm install
 npx expo start
-```
-
-Android:
-
-```bash
-npm run android
 ```
 
 ## Проверки
@@ -40,10 +50,29 @@ npm run test:audit
 npm run typecheck
 npm run lint
 npm run doctor
+npm run check:icons
 ```
 
-`npm test` — unit/smoke (без тяжёлых 10k audit-сюитов).  
-`npm run test:audit` — Codex generator audit + matchstick oracle (10k seeds).
+| Script | Purpose |
+|--------|---------|
+| `npm test` | Unit/smoke (без тяжёлых 10k audit) |
+| `npm run test:audit` | Generator + matchstick oracle audits |
+| `npm run check:icons` | Release icon presence / basic PNG checks |
+
+## Реклама (production)
+
+**Enabled:** banner `R-M-19984070-1`, interstitial `-3`, rewarded `-4`.
+
+**Disabled in v1:** Native `-2`, App Open `-5`, Feed `-6`.
+
+Placements and policy: [docs/MONETIZATION.md](docs/MONETIZATION.md).
+
+## Аналитика
+
+AppMetrica events and payload rules: [docs/ANALYTICS.md](docs/ANALYTICS.md).  
+API key is configured in `src/monetization/config.ts` (not published in docs).
+
+Analytics must not drive game state; gameplay does not depend on event delivery.
 
 ## Структура
 
@@ -52,50 +81,33 @@ app/                    # Expo Router screens
   (tabs)/               # Сегодня / Играть / Прогресс / Ещё
   workout/              # Daily/practice runner + result
 src/
-  features/puzzles/     # Puzzle Engine (domain)
-    engine/             # Generator contract, PuzzleRunner
-    generators/         # Seeded generators (incl. matchsticks)
-    matchsticks/        # Seven-segment equation model + oracle
-    renderers/          # Interaction-type UI
-    validation/         # Puzzle + answer validation
-    types/              # Discriminated unions
-    curated/            # Hand-authored puzzles
+  analytics/            # AppMetrica facade
+  monetization/         # Yandex Ads + policy
+  features/puzzles/     # Puzzle Engine
   features/progress/    # Skills, streak, achievements
   features/workout/     # Daily mix + session store
-  storage/              # Persistence (schema v3)
-  theme/                # Design tokens
-  utils/                # Deterministic PRNG, haptics
-tests/                  # Unit + smoke
-tests/audit/            # Heavy stress / oracle audits
-docs/                   # Architecture docs
+  storage/              # Persistence (schema v4)
+docs/                   # Architecture + release docs
+release-assets/         # Icon master for store/install
+release-artifacts/      # Local AAB/screenshots (binaries not committed)
+credentials/            # keystore.properties.example only
 ```
 
-UI и puzzle-domain разделены: экраны не содержат логики генерации.
+## Документация
 
-## Puzzle Engine (кратко)
+- [docs/PUZZLE_ENGINE.md](docs/PUZZLE_ENGINE.md)
+- [docs/STORAGE.md](docs/STORAGE.md)
+- [docs/MONETIZATION.md](docs/MONETIZATION.md)
+- [docs/ANALYTICS.md](docs/ANALYTICS.md)
+- [docs/PRIVACY_DATA_MAP.md](docs/PRIVACY_DATA_MAP.md)
+- [docs/DATA_SAFETY_DRAFT.md](docs/DATA_SAFETY_DRAFT.md)
+- [docs/privacy.html](docs/privacy.html) — expected Pages URL:  
+  `https://alex1c.github.io/logicGamesRuStore/privacy.html`
+- [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
+- [docs/RUSTORE_SCREENSHOT_PLAN.md](docs/RUSTORE_SCREENSHOT_PLAN.md)
 
-- Типобезопасная модель `Puzzle` (discriminated union по `interactionType`)
-- Deterministic PRNG (`src/utils/prng.ts`) — генераторы **не** используют `Math.random()`
-- Контракт генератора + `generatorId` / `version`
-- Validator перед выдачей задачи в UI
-- Universal `PuzzleRunner` + renderers по типу взаимодействия
-- Matchsticks: tap-to-move, seven-segment, reverse generator, independent oracle
-
-Подробности: [docs/PUZZLE_ENGINE.md](docs/PUZZLE_ENGINE.md)
-
-## Daily / Practice
-
-На вкладке **Сегодня** — Daily Workout из **10** задач (день + profile seed), до 7 категорий включая спички.
-
-На вкладке **Играть** — practice по категориям (10 задач, без влияния на streak).
-
-На вкладке **Прогресс** — навыки, активность, достижения.
-
-Подробности: [docs/PUZZLE_ENGINE.md](docs/PUZZLE_ENGINE.md) · Storage: [docs/STORAGE.md](docs/STORAGE.md)
-
-## Что сознательно отложено
-
-Реклама (РСЯ), AppMetrica SDK, interstitial/rewarded, production signing, облако, аккаунты, push, покупки, монеты/магазин.
+Release AAB naming: `logic-games-1.0.0-v1.aab`.  
+Production keystore is created by the maintainer separately — see checklist; never commit secrets.
 
 ## Лицензия
 

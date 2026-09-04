@@ -34,6 +34,14 @@ yarn-error.*
 .env
 .env*.local
 
+# signing / credentials (never commit real values)
+credentials/keystore.properties
+*.jks
+*.keystore
+release-artifacts/*.aab
+release-artifacts/*.apk
+release-artifacts/*.ipa
+
 # test
 coverage/
 

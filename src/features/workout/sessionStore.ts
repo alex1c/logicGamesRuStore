@@ -46,6 +46,7 @@ import {
 	type AchievementStats,
 } from '@/src/features/progress/achievements'
 import { setPendingAchievements } from '@/src/features/progress/achievementPending'
+import { noteDurableSessionCompleted } from '@/src/monetization/session'
 import { formatClock, toLocalDateString, type LocalDateString } from '@/src/utils/localDate'
 
 export type WorkoutLiveState = {
@@ -214,10 +215,11 @@ export async function startDailyWorkoutSession(options?: {
 		mix: built.mix,
 		workoutDate,
 	})
-	trackEvent('workout_started', {
+	trackEvent('daily_started', {
 		sessionId: live.session.id,
 		workoutDate,
 		size: built.puzzles.length,
+		sessionType: 'daily',
 	})
 	const state = live
 	enqueuePersistence(() => persistState(state))
@@ -302,8 +304,8 @@ export async function restoreActiveWorkout(): Promise<WorkoutLiveState | null> {
 			mix: [],
 		}
 		trackEvent(
-			saved.sessionType === 'daily' ? 'workout_resumed' : 'practice_started',
-			{ sessionId: saved.sessionId },
+			saved.sessionType === 'daily' ? 'daily_resumed' : 'practice_started',
+			{ sessionId: saved.sessionId, sessionType: saved.sessionType },
 		)
 		return live
 	} catch {
@@ -412,7 +414,7 @@ async function applySkillForPuzzle(
 
 async function finalizeSession(state: WorkoutLiveState): Promise<void> {
 	await pushRecentPuzzleIds(state.session.puzzles.map((p) => p.id))
-	await appendSessionHistory({
+	const historyInserted = await appendSessionHistory({
 		sessionId: state.session.id,
 		sessionType: state.sessionType,
 		title: state.session.title,
@@ -456,24 +458,38 @@ async function finalizeSession(state: WorkoutLiveState): Promise<void> {
 			),
 			completedAt: Date.now(),
 		})
+		const previousStreak = streakState
 		streakState = applyDailyCompletion(streakState, state.workoutDate)
 		await saveStreakState(streakState)
-		trackEvent('streak_updated', {
-			current: streakState.current,
-			best: streakState.best,
-		})
-		trackEvent('workout_completed', {
-			sessionId: state.session.id,
-			correct: state.correctCount,
-			total: state.session.puzzles.length,
-		})
-	} else {
+		if (
+			historyInserted &&
+			(previousStreak.current !== streakState.current ||
+				previousStreak.best !== streakState.best)
+		) {
+			trackEvent('streak_updated', {
+				current: streakState.current,
+				best: streakState.best,
+			})
+		}
+		if (historyInserted) {
+			trackEvent('daily_completed', {
+				sessionId: state.session.id,
+				correct: state.correctCount,
+				total: state.session.puzzles.length,
+				sessionType: 'daily',
+			})
+		}
+	} else if (historyInserted) {
 		trackEvent('practice_completed', {
 			sessionId: state.session.id,
 			correct: state.correctCount,
 			total: state.session.puzzles.length,
+			sessionType: 'practice',
 		})
 	}
+
+	// Ad policy counters — durable session identity, once per sessionId.
+	await noteDurableSessionCompleted(state.session.id)
 
 	const stats = await updateAchievementStatsFromSession(state, streakState)
 	const already = await getUnlockedAchievements()

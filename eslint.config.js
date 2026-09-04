@@ -12,6 +12,7 @@ module.exports = defineConfig([
 			'android/*',
 			'ios/*',
 			'coverage/*',
+			'scripts/*',
 		],
 	},
 ])

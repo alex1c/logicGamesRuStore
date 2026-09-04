@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -22,6 +22,7 @@ import {
 } from '@/src/features/progress/achievements'
 import { colors, spacing, typography } from '@/src/theme'
 import { hapticAchievement } from '@/src/utils/haptics'
+import { maybeShowInterstitial } from '@/src/monetization/interstitial/controller'
 
 function toneMessage(correct: number, total: number): string {
 	if (total === 0) {
@@ -46,6 +47,9 @@ export default function WorkoutResultScreen() {
 	)
 	const [streak, setStreak] = useState(0)
 	const [unlocked, setUnlocked] = useState<UnlockedAchievement[]>([])
+
+	const [exitBusy, setExitBusy] = useState(false)
+	const exitLock = useRef(false)
 
 	useEffect(() => {
 		let active = true
@@ -80,9 +84,19 @@ export default function WorkoutResultScreen() {
 			? summarizeLive(live)
 			: (completion?.categoryBreakdown ?? [])
 
-	const handleDone = () => {
+	const leaveAfterAds = async (target: '/(tabs)' | '/(tabs)/play') => {
+		if (exitLock.current) {
+			return
+		}
+		exitLock.current = true
+		setExitBusy(true)
+		try {
+			await maybeShowInterstitial()
+		} catch {
+			// Ads must never block exit.
+		}
 		abandonWorkout()
-		router.replace('/(tabs)')
+		router.replace(target)
 	}
 
 	return (
@@ -132,14 +146,20 @@ export default function WorkoutResultScreen() {
 			)}
 
 			<View style={styles.footer}>
-				<AppButton label="Готово" onPress={handleDone} />
+				<AppButton
+					label="Готово"
+					onPress={() => {
+						void leaveAfterAds('/(tabs)')
+					}}
+					disabled={exitBusy}
+				/>
 				<AppButton
 					label="Ещё потренироваться"
 					variant="secondary"
 					onPress={() => {
-						abandonWorkout()
-						router.replace('/(tabs)/play')
+						void leaveAfterAds('/(tabs)/play')
 					}}
+					disabled={exitBusy}
 				/>
 			</View>
 		</View>
