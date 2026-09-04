@@ -7,6 +7,7 @@ import {
 	abandonWorkout,
 	formatDuration,
 	getLiveWorkout,
+	waitForSessionPersistence,
 } from '@/src/features/workout/sessionStore'
 import {
 	getAnyDailyCompletion,
@@ -44,17 +45,24 @@ export default function WorkoutResultScreen() {
 		null,
 	)
 	const [streak, setStreak] = useState(0)
-	const [unlocked] = useState<UnlockedAchievement[]>(() => {
-		const pending = consumePendingAchievements()
-		if (pending.length > 0) {
-			void hapticAchievement()
-		}
-		return pending
-	})
+	const [unlocked, setUnlocked] = useState<UnlockedAchievement[]>([])
 
 	useEffect(() => {
-		void getAnyDailyCompletion().then(setCompletion)
-		void getStreakState().then((s) => setStreak(s.current))
+		let active = true
+		void (async () => {
+			await waitForSessionPersistence()
+			const [savedCompletion, savedStreak] = await Promise.all([
+				getAnyDailyCompletion(),
+				getStreakState(),
+			])
+			if (!active) return
+			setCompletion(savedCompletion)
+			setStreak(savedStreak.current)
+			const pending = consumePendingAchievements()
+			setUnlocked(pending)
+			if (pending.length > 0) void hapticAchievement()
+		})()
+		return () => { active = false }
 	}, [])
 
 	const isDaily = live?.sessionType === 'daily' || (!live && completion != null)

@@ -104,4 +104,14 @@ describe('storage migration v2 → v3', () => {
 			{ id: 'first_workout', unlockedAt: 1 },
 		])
 	})
+
+	it('does not downgrade or mutate an unknown future schema', async () => {
+		mockMemory.set('@fm/meta', JSON.stringify({ schemaVersion: 99 }))
+		mockMemory.set('@fm/achievements', '{future-format:true}')
+		const before = new Map(mockMemory)
+
+		await ensureStorageMigrated()
+
+		expect(mockMemory).toEqual(before)
+	})
 })

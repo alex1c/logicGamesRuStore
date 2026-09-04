@@ -67,6 +67,19 @@ export type WorkoutLiveState = {
 }
 
 let live: WorkoutLiveState | null = null
+let persistenceQueue: Promise<void> = Promise.resolve()
+
+function enqueuePersistence(operation: () => Promise<void>): void {
+	persistenceQueue = persistenceQueue
+		.catch(() => undefined)
+		.then(operation)
+		.catch(() => undefined)
+}
+
+/** Wait until all accepted puzzle outcomes have reached durable storage. */
+export async function waitForSessionPersistence(): Promise<void> {
+	await persistenceQueue
+}
 
 export function getLiveWorkout(): WorkoutLiveState | null {
 	return live
@@ -174,7 +187,8 @@ export function startDemoWorkout(baseSeed?: number): WorkoutLiveState {
 		elapsedMs: 0,
 		mix: [],
 	}
-	void persist().catch(() => undefined)
+	const state = live
+	enqueuePersistence(() => persistState(state))
 	return live
 }
 
@@ -205,7 +219,8 @@ export async function startDailyWorkoutSession(options?: {
 		workoutDate,
 		size: built.puzzles.length,
 	})
-	void persist().catch(() => undefined)
+	const state = live
+	enqueuePersistence(() => persistState(state))
 	return live
 }
 
@@ -238,7 +253,8 @@ export async function startPracticeSession(
 		size: built.puzzles.length,
 	})
 	trackEvent('category_selected', { category })
-	void persist().catch(() => undefined)
+	const state = live
+	enqueuePersistence(() => persistState(state))
 	return live
 }
 
@@ -351,11 +367,12 @@ export function recordPuzzleResult(input: {
 		trackEvent('solution_revealed', {})
 	}
 
-	void applySkillForPuzzle(live.session.puzzles[index].category, {
+	const state = live
+	const skillUpdate = () => applySkillForPuzzle(state.session.puzzles[index].category, {
 		isCorrect: input.isCorrect,
 		hintsUsed: input.hintsUsed,
 		revealedSolution,
-	}).catch(() => undefined)
+	})
 
 	if (index + 1 >= live.session.puzzles.length) {
 		live.finished = true
@@ -364,11 +381,17 @@ export function recordPuzzleResult(input: {
 			live.elapsedMs + Math.max(0, Date.now() - live.startedAt),
 		)
 		live.currentIndex = index
-		void finalizeSession(live).catch(() => undefined)
+		enqueuePersistence(async () => {
+			await skillUpdate()
+			await finalizeSession(state)
+		})
 	} else {
 		live.currentIndex = index + 1
+		enqueuePersistence(async () => {
+			await skillUpdate()
+			await persistState(state)
+		})
 	}
-	void persist().catch(() => undefined)
 	return live
 }
 
@@ -471,14 +494,16 @@ async function updateAchievementStatsFromSession(
 	streakState: Awaited<ReturnType<typeof getStreakState>>,
 ): Promise<AchievementStats> {
 	const stats = await getAchievementStats()
+	const processed = stats.processedSessionIds ?? []
+	if (processed.includes(state.session.id)) {
+		return stats
+	}
 	stats.workoutsCompleted += 1
 	stats.puzzlesSolved += state.session.puzzles.length
 	stats.puzzlesCorrect += state.correctCount
 	stats.currentStreak = streakState.current
 	stats.bestStreak = streakState.best
 
-	let run = 0
-	let bestNoHint = stats.noHintStreak
 	state.session.puzzles.forEach((puzzle, index) => {
 		const detail = state.resultDetails[index]
 		const ok = state.results[index] === 'correct'
@@ -487,23 +512,21 @@ async function updateAchievementStatsFromSession(
 				(stats.correctByCategory[puzzle.category] ?? 0) + 1
 		}
 		if (ok && detail.hintsUsed === 0 && !detail.revealedSolution) {
-			run += 1
-			bestNoHint = Math.max(bestNoHint, run)
+			stats.noHintStreak += 1
 		} else {
-			run = 0
+			stats.noHintStreak = 0
 		}
 		if (!stats.playedCategories.includes(puzzle.category)) {
 			stats.playedCategories = [...stats.playedCategories, puzzle.category]
 		}
 	})
-	stats.noHintStreak = bestNoHint
-
 	if (
 		state.sessionType === 'daily' &&
 		state.correctCount === state.session.puzzles.length
 	) {
 		stats.perfectDailyCount += 1
 	}
+	stats.processedSessionIds = [state.session.id, ...processed].slice(0, 100)
 
 	await saveAchievementStats(stats)
 	return stats
@@ -511,30 +534,30 @@ async function updateAchievementStatsFromSession(
 
 export function abandonWorkout(): void {
 	live = null
-	void saveActiveSession(null).catch(() => undefined)
+	enqueuePersistence(() => saveActiveSession(null))
 }
 
-async function persist(): Promise<void> {
-	if (!live || live.finished) {
+async function persistState(state: WorkoutLiveState | null): Promise<void> {
+	if (!state || state.finished) {
 		await saveActiveSession(null)
 		return
 	}
 	const payload: ActiveSessionPersisted = {
 		schemaVersion: STORAGE_SCHEMA_VERSION,
-		sessionId: live.session.id,
-		sessionType: live.sessionType,
-		workoutDate: live.workoutDate,
-		practiceCategory: live.practiceCategory,
-		title: live.session.title,
-		plan: live.plan,
-		puzzleIds: live.session.puzzles.map((p) => p.id),
-		currentIndex: live.currentIndex,
-		correctCount: live.correctCount,
-		wrongCount: live.wrongCount,
-		hintsUsed: live.hintsUsed,
-		startedAt: live.startedAt,
-		elapsedMs: live.elapsedMs,
-		results: live.resultDetails,
+		sessionId: state.session.id,
+		sessionType: state.sessionType,
+		workoutDate: state.workoutDate,
+		practiceCategory: state.practiceCategory,
+		title: state.session.title,
+		plan: state.plan,
+		puzzleIds: state.session.puzzles.map((p) => p.id),
+		currentIndex: state.currentIndex,
+		correctCount: state.correctCount,
+		wrongCount: state.wrongCount,
+		hintsUsed: state.hintsUsed,
+		startedAt: state.startedAt,
+		elapsedMs: state.elapsedMs,
+		results: state.resultDetails,
 		finished: false,
 	}
 	await saveActiveSession(payload)

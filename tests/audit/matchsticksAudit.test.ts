@@ -19,15 +19,15 @@ const DIFFICULTIES: Difficulty[] = [1, 2, 3, 4, 5]
 describe('matchsticks oracle audit', () => {
 	jest.setTimeout(180_000)
 
-	it(`unique solvable puzzles for ${SEEDS} seeds`, () => {
+	it(`unique solvable puzzles for ${SEEDS} seeds at every difficulty`, () => {
 		let generated = 0
 		let invalid = 0
 		let ambiguous = 0
 		let determinismFails = 0
 		let oracleFails = 0
 
-		for (let seed = 0; seed < SEEDS; seed += 1) {
-			const difficulty = DIFFICULTIES[seed % DIFFICULTIES.length]
+		for (const difficulty of DIFFICULTIES) {
+			for (let seed = 0; seed < SEEDS; seed += 1) {
 			const puzzle = matchsticksEquationGenerator.generate({
 				seed,
 				difficulty,
@@ -75,6 +75,7 @@ describe('matchsticks oracle audit', () => {
 			if (!checkAnswer(puzzle, puzzle.answer).isCorrect) {
 				oracleFails += 1
 			}
+			}
 		}
 
 		expect({
@@ -84,7 +85,7 @@ describe('matchsticks oracle audit', () => {
 			determinismFails,
 			oracleFails,
 		}).toEqual({
-			generated: SEEDS,
+			generated: SEEDS * DIFFICULTIES.length,
 			invalid: 0,
 			ambiguous: 0,
 			determinismFails: 0,

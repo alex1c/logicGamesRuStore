@@ -155,6 +155,8 @@ export type AchievementStats = {
 	correctByCategory: Partial<Record<PuzzleCategory, number>>
 	playedCategories: PuzzleCategory[]
 	perfectDailyCount: number
+	/** Bounded idempotency ledger for completed-session accounting. */
+	processedSessionIds?: string[]
 }
 
 export type UnlockedAchievement = {

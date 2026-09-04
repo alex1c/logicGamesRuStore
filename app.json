@@ -12,6 +12,11 @@
     },
     "android": {
       "package": "ru.forestmusic.logicgames",
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E8F0FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

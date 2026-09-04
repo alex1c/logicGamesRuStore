@@ -170,6 +170,15 @@ export async function ensureStorageMigrated(): Promise<void> {
 		migrated = true
 		return
 	}
+	// A newer app may have written fields this build does not understand.
+	// Never downgrade or partially rewrite that storage.
+	if (
+		Number.isInteger(meta?.schemaVersion) &&
+		meta!.schemaVersion > STORAGE_SCHEMA_VERSION
+	) {
+		migrated = true
+		return
+	}
 
 	const previous = meta?.schemaVersion ?? 0
 
@@ -229,6 +238,7 @@ export function emptyAchievementStats(): AchievementStats {
 		correctByCategory: {},
 		playedCategories: [],
 		perfectDailyCount: 0,
+		processedSessionIds: [],
 	}
 }
 
@@ -405,11 +415,15 @@ export async function getSessionHistory(): Promise<SessionHistoryItem[]> {
 
 export async function appendSessionHistory(
 	item: SessionHistoryItem,
-): Promise<void> {
+): Promise<boolean> {
 	await ensureStorageMigrated()
 	const list = await getSessionHistory()
+	if (list.some((existing) => existing.sessionId === item.sessionId)) {
+		return false
+	}
 	const next = [item, ...list].slice(0, HISTORY_LIMIT)
 	await writeJson(KEYS.sessionHistory, next)
+	return true
 }
 
 const RECENT_LIMIT = 80

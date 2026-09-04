@@ -3,14 +3,36 @@ import {
 	getLiveWorkout,
 	recordPuzzleResult,
 	startDemoWorkout,
+	waitForSessionPersistence,
 } from '@/src/features/workout/sessionStore'
+import {
+	getAchievementStats,
+	getSessionHistory,
+	getSkills,
+	resetStorageMigrationFlagForTests,
+} from '@/src/storage'
+
+const mockMemory = new Map<string, string>()
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
-	getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined), removeItem: jest.fn(async () => undefined),
+	getItem: jest.fn(async (key: string) => mockMemory.get(key) ?? null),
+	setItem: jest.fn(async (key: string, value: string) => {
+		await Promise.resolve()
+		mockMemory.set(key, value)
+	}),
+	removeItem: jest.fn(async (key: string) => { mockMemory.delete(key) }),
 }))
 
 describe('workout session accounting', () => {
-	afterEach(() => abandonWorkout())
+	beforeEach(async () => {
+		await waitForSessionPersistence()
+		mockMemory.clear()
+		resetStorageMigrationFlagForTests()
+	})
+	afterEach(async () => {
+		abandonWorkout()
+		await waitForSessionPersistence()
+	})
 
 	it('creates exactly five unique puzzles and ignores duplicate completion', () => {
 		const state = startDemoWorkout(123)
@@ -47,5 +69,61 @@ describe('workout session accounting', () => {
 		expect(live.correctCount).toBe(1)
 		expect(live.wrongCount).toBe(0)
 		expect(live.hintsUsed).toBe(0)
+	})
+
+	it('serializes skill updates and final accounting', async () => {
+		const state = startDemoWorkout(900)
+		for (let i = 0; i < state.session.puzzles.length; i += 1) {
+			recordPuzzleResult({ isCorrect: true, hintsUsed: 0 })
+		}
+		await waitForSessionPersistence()
+
+		const expectedByCategory = new Map<string, number>()
+		for (const puzzle of state.session.puzzles) {
+			expectedByCategory.set(
+				puzzle.category,
+				(expectedByCategory.get(puzzle.category) ?? 2) + 0.12,
+			)
+		}
+		const skills = await getSkills()
+		for (const [category, expected] of expectedByCategory) {
+			expect(skills[category as keyof typeof skills]).toBeCloseTo(expected)
+		}
+		expect(await getSessionHistory()).toHaveLength(1)
+		expect((await getAchievementStats()).puzzlesCorrect).toBe(5)
+	})
+
+	it('continues the no-hint streak across session boundaries', async () => {
+		for (const seed of [901, 902]) {
+			const state = startDemoWorkout(seed)
+			for (let i = 0; i < state.session.puzzles.length; i += 1) {
+				recordPuzzleResult({ isCorrect: true, hintsUsed: 0 })
+			}
+			await waitForSessionPersistence()
+		}
+		expect((await getAchievementStats()).noHintStreak).toBe(10)
+	})
+
+	it('does not account the same completed session twice', async () => {
+		for (let replay = 0; replay < 2; replay += 1) {
+			const state = startDemoWorkout(904)
+			for (let i = 0; i < state.session.puzzles.length; i += 1) {
+				recordPuzzleResult({ isCorrect: true, hintsUsed: 0 })
+			}
+			await waitForSessionPersistence()
+		}
+		expect(await getSessionHistory()).toHaveLength(1)
+		expect((await getAchievementStats()).puzzlesCorrect).toBe(5)
+	})
+
+	it('resets the no-hint streak on non-qualifying outcomes', async () => {
+		startDemoWorkout(903)
+		recordPuzzleResult({ isCorrect: true, hintsUsed: 0 })
+		recordPuzzleResult({ isCorrect: true, hintsUsed: 0 })
+		recordPuzzleResult({ isCorrect: false, hintsUsed: 0 })
+		recordPuzzleResult({ isCorrect: true, hintsUsed: 1 })
+		recordPuzzleResult({ isCorrect: true, hintsUsed: 0, revealedSolution: true })
+		await waitForSessionPersistence()
+		expect((await getAchievementStats()).noHintStreak).toBe(0)
 	})
 })
