@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -7,27 +8,59 @@ import {
 	formatDuration,
 	getLiveWorkout,
 } from '@/src/features/workout/sessionStore'
+import {
+	getAnyDailyCompletion,
+	getStreakState,
+	type DailyCompletionPersisted,
+} from '@/src/storage'
+import { CATEGORY_LABELS } from '@/src/features/puzzles/types'
 import { colors, spacing, typography } from '@/src/theme'
+
+function toneMessage(correct: number, total: number): string {
+	if (total === 0) {
+		return 'Сегодня готово'
+	}
+	const ratio = correct / total
+	if (ratio >= 0.8) {
+		return 'Отличная тренировка'
+	}
+	if (ratio >= 0.5) {
+		return 'Хорошая работа'
+	}
+	return 'Сегодня готово'
+}
 
 export default function WorkoutResultScreen() {
 	const router = useRouter()
 	const insets = useSafeAreaInsets()
 	const live = getLiveWorkout()
+	const [completion, setCompletion] = useState<DailyCompletionPersisted | null>(
+		null,
+	)
+	const [streak, setStreak] = useState(0)
 
-	const total = live?.session.puzzles.length ?? 0
-	const correct = live?.correctCount ?? 0
-	const wrong = live?.wrongCount ?? 0
-	const hints = live?.hintsUsed ?? 0
-	const elapsed = live?.elapsedMs ?? 0
+	useEffect(() => {
+		void getAnyDailyCompletion().then(setCompletion)
+		void getStreakState().then((s) => setStreak(s.current))
+	}, [])
+
+	const isDaily = live?.sessionType === 'daily' || (!live && completion != null)
+	const total =
+		live?.session.puzzles.length ??
+		(completion
+			? completion.correctCount + completion.wrongCount
+			: 0)
+	const correct = live?.correctCount ?? completion?.correctCount ?? 0
+	const hints = live?.hintsUsed ?? completion?.hintsUsed ?? 0
+	const elapsed = live?.elapsedMs ?? completion?.elapsedMs ?? 0
+	const breakdown =
+		live != null
+			? summarizeLive(live)
+			: (completion?.categoryBreakdown ?? [])
 
 	const handleDone = () => {
 		abandonWorkout()
 		router.replace('/(tabs)')
-	}
-
-	const handleAgain = () => {
-		abandonWorkout()
-		router.replace('/workout')
 	}
 
 	return (
@@ -37,29 +70,54 @@ export default function WorkoutResultScreen() {
 				{ paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md },
 			]}
 		>
-			<Text style={styles.kicker}>Готово</Text>
-			<Text style={styles.title}>Результат</Text>
-			<Text style={styles.score}>
-				{correct} / {total}
+			<Text style={styles.kicker}>{toneMessage(correct, total)}</Text>
+			<Text style={styles.title}>
+				{isDaily ? 'Сегодня' : 'Результат'}: {correct}/{total}
 			</Text>
 
 			<SurfaceCard style={styles.card}>
-				<Row label="Правильных" value={String(correct)} />
-				<Row label="Ошибок" value={String(wrong)} />
-				<Row label="Использовано подсказок" value={String(hints)} />
-				<Row label="Время" value={formatDuration(elapsed)} />
+				{breakdown.map((row) => (
+					<Row
+						key={row.category}
+						label={CATEGORY_LABELS[row.category as keyof typeof CATEGORY_LABELS] ?? row.category}
+						value={`${row.correct}/${row.total}`}
+					/>
+				))}
+				<Row label="⏱ Время" value={formatDuration(elapsed)} />
+				<Row label="💡 Подсказок" value={String(hints)} />
+				{isDaily && <Row label="🔥 Серия" value={`${streak} дней`} />}
 			</SurfaceCard>
 
 			<View style={styles.footer}>
 				<AppButton label="На главный экран" onPress={handleDone} />
 				<AppButton
-					label="Ещё раз"
+					label="В каталог"
 					variant="secondary"
-					onPress={handleAgain}
+					onPress={() => {
+						abandonWorkout()
+						router.replace('/(tabs)/play')
+					}}
 				/>
 			</View>
 		</View>
 	)
+}
+
+function summarizeLive(live: NonNullable<ReturnType<typeof getLiveWorkout>>) {
+	const map = new Map<string, { category: string; correct: number; total: number }>()
+	live.session.puzzles.forEach((puzzle, index) => {
+		const row = map.get(puzzle.category) ?? {
+			category: puzzle.category,
+			correct: 0,
+			total: 0,
+		}
+		row.total += 1
+		if (live.results[index] === 'correct') {
+			row.correct += 1
+		}
+		map.set(puzzle.category, row)
+	})
+	return [...map.values()]
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -78,38 +136,15 @@ const styles = StyleSheet.create({
 		padding: spacing.lg,
 		gap: spacing.md,
 	},
-	kicker: {
-		...typography.label,
-		color: colors.light.accent,
-	},
-	title: {
-		...typography.display,
-		color: colors.light.textPrimary,
-	},
-	score: {
-		fontSize: 48,
-		lineHeight: 56,
-		fontWeight: '700',
-		color: colors.light.primary,
-	},
-	card: {
-		gap: spacing.sm,
-	},
+	kicker: { ...typography.label, color: colors.light.accent },
+	title: { ...typography.display, color: colors.light.textPrimary },
+	card: { gap: spacing.sm },
 	row: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
 		alignItems: 'center',
 	},
-	rowLabel: {
-		...typography.body,
-		color: colors.light.textSecondary,
-	},
-	rowValue: {
-		...typography.bodyStrong,
-		color: colors.light.textPrimary,
-	},
-	footer: {
-		marginTop: 'auto',
-		gap: spacing.sm,
-	},
+	rowLabel: { ...typography.body, color: colors.light.textSecondary },
+	rowValue: { ...typography.bodyStrong, color: colors.light.textPrimary },
+	footer: { marginTop: 'auto', gap: spacing.sm },
 })

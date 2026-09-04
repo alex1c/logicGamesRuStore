@@ -1,22 +1,59 @@
-import type { Puzzle } from '@/src/features/puzzles/types'
+/**
+ * Session runtime for Daily + Practice (+ legacy demo for Codex regression tests).
+ * Preserves duplicate-score / finish guards from Phase 1 Codex hardening.
+ */
+
+import type { Puzzle, PuzzleCategory } from '@/src/features/puzzles/types'
+import {
+	createDailyWorkout,
+	createPracticeWorkout,
+	materializePlan,
+	DAILY_ESTIMATED_MINUTES,
+} from '@/src/features/workout/createDailyWorkout'
 import { createDemoWorkout, type WorkoutSession } from '@/src/features/workout/createDemoWorkout'
 import {
-	clearDemoWorkout,
-	getDemoWorkout,
-	saveDemoWorkout,
-	type DemoWorkoutPersisted,
+	applySkillOutcome,
+	classifyOutcome,
+	getCategorySkill,
+	type SkillMap,
+} from '@/src/features/progress/skillModel'
+import { applyDailyCompletion } from '@/src/features/progress/streak'
+import { trackEvent } from '@/src/features/progress/analyticsEvents'
+import {
+	appendSessionHistory,
+	getActiveSession,
+	getOrCreateProfile,
+	getRecentPuzzleIds,
+	getSkills,
+	getStreakState,
+	pushRecentPuzzleIds,
+	saveActiveSession,
+	saveDailyCompletion,
+	saveSkills,
+	saveStreakState,
+	type ActiveSessionPersisted,
+	type PuzzlePlanPersisted,
+	type PuzzleResultPersisted,
+	type SessionType,
 } from '@/src/storage'
+import { formatClock, toLocalDateString, type LocalDateString } from '@/src/utils/localDate'
 
 export type WorkoutLiveState = {
 	session: WorkoutSession
+	sessionType: SessionType
+	workoutDate?: LocalDateString
+	practiceCategory?: PuzzleCategory
+	plan: PuzzlePlanPersisted[]
 	currentIndex: number
 	correctCount: number
 	wrongCount: number
 	hintsUsed: number
 	startedAt: number
 	results: ('pending' | 'correct' | 'wrong')[]
+	resultDetails: PuzzleResultPersisted[]
 	finished: boolean
 	elapsedMs: number
+	mix: { category: PuzzleCategory; label: string; count: number }[]
 }
 
 let live: WorkoutLiveState | null = null
@@ -25,54 +62,233 @@ export function getLiveWorkout(): WorkoutLiveState | null {
 	return live
 }
 
+function toLegacySession(
+	id: string,
+	title: string,
+	plan: PuzzlePlanPersisted[],
+	puzzles: Puzzle[],
+): WorkoutSession {
+	return {
+		id,
+		title,
+		items: plan.map((item) =>
+			item.source === 'curated'
+				? { source: 'curated' as const, curatedId: item.curatedId }
+				: {
+						source: 'generator' as const,
+						generatorId: item.generatorId,
+						difficulty: item.difficulty,
+						seed: item.seed,
+					},
+		),
+		puzzles,
+		createdAt: Date.now(),
+	}
+}
+
+function buildLiveFromParts(input: {
+	sessionType: SessionType
+	sessionId: string
+	title: string
+	plan: PuzzlePlanPersisted[]
+	puzzles: Puzzle[]
+	mix: WorkoutLiveState['mix']
+	workoutDate?: LocalDateString
+	practiceCategory?: PuzzleCategory
+}): WorkoutLiveState {
+	return {
+		session: toLegacySession(
+			input.sessionId,
+			input.title,
+			input.plan,
+			input.puzzles,
+		),
+		sessionType: input.sessionType,
+		workoutDate: input.workoutDate,
+		practiceCategory: input.practiceCategory,
+		plan: input.plan,
+		currentIndex: 0,
+		correctCount: 0,
+		wrongCount: 0,
+		hintsUsed: 0,
+		startedAt: Date.now(),
+		results: input.puzzles.map(() => 'pending'),
+		resultDetails: input.puzzles.map(() => ({
+			status: 'pending',
+			hintsUsed: 0,
+			revealedSolution: false,
+		})),
+		finished: false,
+		elapsedMs: 0,
+		mix: input.mix,
+	}
+}
+
+/** Legacy 5-puzzle demo — kept for Codex regression tests. */
 export function startDemoWorkout(baseSeed?: number): WorkoutLiveState {
 	const session = createDemoWorkout(baseSeed)
 	live = {
 		session,
+		sessionType: 'practice',
+		plan: session.items.map((item, index) => {
+			const puzzle = session.puzzles[index]
+			if (item.source === 'curated') {
+				return {
+					source: 'curated',
+					curatedId: item.curatedId,
+					category: puzzle.category,
+					difficulty: puzzle.difficulty,
+				}
+			}
+			return {
+				source: 'generator',
+				generatorId: item.generatorId,
+				generatorVersion: puzzle.metadata.generatorVersion,
+				difficulty: item.difficulty,
+				seed: item.seed,
+				category: puzzle.category,
+			}
+		}),
 		currentIndex: 0,
 		correctCount: 0,
 		wrongCount: 0,
 		hintsUsed: 0,
 		startedAt: Date.now(),
 		results: session.puzzles.map(() => 'pending'),
+		resultDetails: session.puzzles.map(() => ({
+			status: 'pending',
+			hintsUsed: 0,
+			revealedSolution: false,
+		})),
 		finished: false,
 		elapsedMs: 0,
+		mix: [],
 	}
 	void persist().catch(() => undefined)
 	return live
 }
 
-/** Restore an unfinished, structurally valid demo session after process restart. */
-export async function restoreDemoWorkout(): Promise<WorkoutLiveState | null> {
-	if (live) return live
-	const saved = await getDemoWorkout()
-	if (!saved || !saved.sessionId.startsWith('demo-')) return null
-	const baseSeed = Number(saved.sessionId.slice(5))
-	if (!Number.isFinite(baseSeed)) return null
-	const session = createDemoWorkout(baseSeed)
-	const valid =
-		saved.puzzleIds.length === session.puzzles.length &&
-		saved.puzzleIds.every((id, index) => id === session.puzzles[index].id) &&
-		saved.results.length === session.puzzles.length &&
-		saved.results.every((result) => ['pending', 'correct', 'wrong'].includes(result)) &&
-		Number.isInteger(saved.currentIndex) &&
-		saved.currentIndex >= 0 &&
-		saved.currentIndex < session.puzzles.length &&
-		[saved.correctCount, saved.wrongCount, saved.hintsUsed, saved.startedAt].every(Number.isFinite) &&
-		saved.correctCount >= 0 && saved.wrongCount >= 0 && saved.hintsUsed >= 0
-	if (!valid) return null
-	live = {
-		session,
-		currentIndex: saved.currentIndex,
-		correctCount: saved.correctCount,
-		wrongCount: saved.wrongCount,
-		hintsUsed: saved.hintsUsed,
-		startedAt: saved.startedAt,
-		results: saved.results,
-		finished: false,
-		elapsedMs: 0,
-	}
+export async function startDailyWorkoutSession(options?: {
+	workoutDate?: LocalDateString
+}): Promise<WorkoutLiveState> {
+	const profile = await getOrCreateProfile()
+	const skills = await getSkills()
+	const recentIds = await getRecentPuzzleIds()
+	const workoutDate = options?.workoutDate ?? toLocalDateString()
+	const built = createDailyWorkout({
+		workoutDate,
+		profileSeed: profile.profileSeed,
+		skills,
+		recentIds,
+	})
+	live = buildLiveFromParts({
+		sessionType: 'daily',
+		sessionId: built.sessionId,
+		title: built.title,
+		plan: built.plan,
+		puzzles: built.puzzles,
+		mix: built.mix,
+		workoutDate,
+	})
+	trackEvent('workout_started', {
+		sessionId: live.session.id,
+		workoutDate,
+		size: built.puzzles.length,
+	})
+	void persist().catch(() => undefined)
 	return live
+}
+
+export async function startPracticeSession(
+	category: PuzzleCategory,
+	baseSeed?: number,
+): Promise<WorkoutLiveState> {
+	const profile = await getOrCreateProfile()
+	const skills = await getSkills()
+	const recentIds = await getRecentPuzzleIds()
+	const built = createPracticeWorkout({
+		category,
+		profileSeed: profile.profileSeed,
+		skills,
+		recentIds,
+		baseSeed,
+	})
+	live = buildLiveFromParts({
+		sessionType: 'practice',
+		sessionId: built.sessionId,
+		title: built.title,
+		plan: built.plan,
+		puzzles: built.puzzles,
+		mix: built.mix,
+		practiceCategory: category,
+	})
+	trackEvent('practice_started', {
+		sessionId: live.session.id,
+		category,
+		size: built.puzzles.length,
+	})
+	trackEvent('category_selected', { category })
+	void persist().catch(() => undefined)
+	return live
+}
+
+export async function restoreActiveWorkout(): Promise<WorkoutLiveState | null> {
+	if (live && !live.finished) {
+		return live
+	}
+	const saved = await getActiveSession()
+	if (!saved || saved.finished) {
+		return null
+	}
+	try {
+		const puzzles = materializePlan(saved.plan)
+		const valid =
+			saved.puzzleIds.length === puzzles.length &&
+			saved.puzzleIds.every((id, index) => id === puzzles[index].id) &&
+			saved.results.length === puzzles.length &&
+			Number.isInteger(saved.currentIndex) &&
+			saved.currentIndex >= 0 &&
+			saved.currentIndex < puzzles.length
+		if (!valid) {
+			await saveActiveSession(null)
+			return null
+		}
+		live = {
+			session: toLegacySession(
+				saved.sessionId,
+				saved.title,
+				saved.plan,
+				puzzles,
+			),
+			sessionType: saved.sessionType,
+			workoutDate: saved.workoutDate,
+			practiceCategory: saved.practiceCategory,
+			plan: saved.plan,
+			currentIndex: saved.currentIndex,
+			correctCount: saved.correctCount,
+			wrongCount: saved.wrongCount,
+			hintsUsed: saved.hintsUsed,
+			startedAt: saved.startedAt,
+			results: saved.results.map((r) => r.status),
+			resultDetails: saved.results,
+			finished: false,
+			elapsedMs: Math.max(0, saved.elapsedMs),
+			mix: [],
+		}
+		trackEvent(
+			saved.sessionType === 'daily' ? 'workout_resumed' : 'practice_started',
+			{ sessionId: saved.sessionId },
+		)
+		return live
+	} catch {
+		await saveActiveSession(null)
+		return null
+	}
+}
+
+/** @deprecated Alias kept for Codex play screen — prefer restoreActiveWorkout. */
+export async function restoreDemoWorkout(): Promise<WorkoutLiveState | null> {
+	return restoreActiveWorkout()
 }
 
 export function getCurrentPuzzle(): Puzzle | null {
@@ -85,6 +301,7 @@ export function getCurrentPuzzle(): Puzzle | null {
 export function recordPuzzleResult(input: {
 	isCorrect: boolean
 	hintsUsed: number
+	revealedSolution?: boolean
 }): WorkoutLiveState | null {
 	if (!live) {
 		return null
@@ -93,8 +310,16 @@ export function recordPuzzleResult(input: {
 	if (live.finished || live.results[index] !== 'pending') {
 		return live
 	}
+
+	const revealedSolution = input.revealedSolution === true
 	live.hintsUsed += input.hintsUsed
-	if (input.isCorrect) {
+	live.resultDetails[index] = {
+		status: input.isCorrect && !revealedSolution ? 'correct' : 'wrong',
+		hintsUsed: input.hintsUsed,
+		revealedSolution,
+	}
+
+	if (input.isCorrect && !revealedSolution) {
 		live.correctCount += 1
 		live.results[index] = 'correct'
 	} else {
@@ -102,10 +327,34 @@ export function recordPuzzleResult(input: {
 		live.results[index] = 'wrong'
 	}
 
+	trackEvent('puzzle_answered', {
+		sessionId: live.session.id,
+		category: live.session.puzzles[index].category,
+		correct: input.isCorrect && !revealedSolution,
+		hintsUsed: input.hintsUsed,
+		revealedSolution,
+	})
+	if (input.hintsUsed > 0) {
+		trackEvent('hint_used', { count: input.hintsUsed })
+	}
+	if (revealedSolution) {
+		trackEvent('solution_revealed', {})
+	}
+
+	void applySkillForPuzzle(live.session.puzzles[index].category, {
+		isCorrect: input.isCorrect,
+		hintsUsed: input.hintsUsed,
+		revealedSolution,
+	}).catch(() => undefined)
+
 	if (index + 1 >= live.session.puzzles.length) {
 		live.finished = true
-		live.elapsedMs = Math.max(0, Date.now() - live.startedAt)
+		live.elapsedMs = Math.max(
+			0,
+			live.elapsedMs + Math.max(0, Date.now() - live.startedAt),
+		)
 		live.currentIndex = index
+		void finalizeSession(live).catch(() => undefined)
 	} else {
 		live.currentIndex = index + 1
 	}
@@ -113,36 +362,123 @@ export function recordPuzzleResult(input: {
 	return live
 }
 
+async function applySkillForPuzzle(
+	category: PuzzleCategory,
+	outcome: {
+		isCorrect: boolean
+		hintsUsed: number
+		revealedSolution: boolean
+	},
+): Promise<void> {
+	const skills: SkillMap = { ...(await getSkills()) }
+	const current = getCategorySkill(skills, category)
+	const kind = classifyOutcome(outcome)
+	skills[category] = applySkillOutcome(current, kind)
+	await saveSkills(skills)
+}
+
+async function finalizeSession(state: WorkoutLiveState): Promise<void> {
+	await pushRecentPuzzleIds(state.session.puzzles.map((p) => p.id))
+	await appendSessionHistory({
+		sessionId: state.session.id,
+		sessionType: state.sessionType,
+		title: state.session.title,
+		workoutDate: state.workoutDate,
+		practiceCategory: state.practiceCategory,
+		correctCount: state.correctCount,
+		total: state.session.puzzles.length,
+		hintsUsed: state.hintsUsed,
+		elapsedMs: state.elapsedMs,
+		completedAt: Date.now(),
+	})
+
+	if (state.sessionType === 'daily' && state.workoutDate) {
+		const breakdownMap = new Map<
+			PuzzleCategory,
+			{ correct: number; total: number }
+		>()
+		state.session.puzzles.forEach((puzzle, index) => {
+			const row = breakdownMap.get(puzzle.category) ?? {
+				correct: 0,
+				total: 0,
+			}
+			row.total += 1
+			if (state.results[index] === 'correct') {
+				row.correct += 1
+			}
+			breakdownMap.set(puzzle.category, row)
+		})
+		await saveDailyCompletion({
+			schemaVersion: 2,
+			workoutDate: state.workoutDate,
+			sessionId: state.session.id,
+			correctCount: state.correctCount,
+			wrongCount: state.wrongCount,
+			hintsUsed: state.hintsUsed,
+			elapsedMs: state.elapsedMs,
+			categoryBreakdown: [...breakdownMap.entries()].map(
+				([category, stats]) => ({ category, ...stats }),
+			),
+			completedAt: Date.now(),
+		})
+		const streak = applyDailyCompletion(
+			await getStreakState(),
+			state.workoutDate,
+		)
+		await saveStreakState(streak)
+		trackEvent('streak_updated', {
+			current: streak.current,
+			best: streak.best,
+		})
+		trackEvent('workout_completed', {
+			sessionId: state.session.id,
+			correct: state.correctCount,
+			total: state.session.puzzles.length,
+		})
+	} else {
+		trackEvent('practice_completed', {
+			sessionId: state.session.id,
+			correct: state.correctCount,
+			total: state.session.puzzles.length,
+		})
+	}
+
+	await saveActiveSession(null)
+}
+
 export function abandonWorkout(): void {
 	live = null
-	void clearDemoWorkout().catch(() => undefined)
+	void saveActiveSession(null).catch(() => undefined)
 }
 
 async function persist(): Promise<void> {
-	if (!live) {
-		await clearDemoWorkout()
+	if (!live || live.finished) {
+		await saveActiveSession(null)
 		return
 	}
-	const payload: DemoWorkoutPersisted = {
-		schemaVersion: 1,
+	const payload: ActiveSessionPersisted = {
+		schemaVersion: 2,
 		sessionId: live.session.id,
+		sessionType: live.sessionType,
+		workoutDate: live.workoutDate,
+		practiceCategory: live.practiceCategory,
+		title: live.session.title,
+		plan: live.plan,
 		puzzleIds: live.session.puzzles.map((p) => p.id),
 		currentIndex: live.currentIndex,
 		correctCount: live.correctCount,
 		wrongCount: live.wrongCount,
 		hintsUsed: live.hintsUsed,
 		startedAt: live.startedAt,
-		results: live.results,
+		elapsedMs: live.elapsedMs,
+		results: live.resultDetails,
+		finished: false,
 	}
-	await saveDemoWorkout(payload)
+	await saveActiveSession(payload)
 }
 
 export function formatDuration(ms: number): string {
-	const totalSec = Math.max(0, Math.round(ms / 1000))
-	const minutes = Math.floor(totalSec / 60)
-	const seconds = totalSec % 60
-	if (minutes === 0) {
-		return `${seconds} с`
-	}
-	return `${minutes} мин ${seconds.toString().padStart(2, '0')} с`
+	return formatClock(ms)
 }
+
+export { DAILY_ESTIMATED_MINUTES }

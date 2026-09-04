@@ -45,6 +45,7 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 	const [hintLevelShown, setHintLevelShown] = useState(0)
 	const [revealedSolution, setRevealedSolution] = useState(false)
 	const [hintsUsed, setHintsUsed] = useState(0)
+	const [confirmReveal, setConfirmReveal] = useState(false)
 	const completionSent = useRef(false)
 	const hintLevelRef = useRef(0)
 
@@ -79,9 +80,14 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 	}
 
 	const handleReveal = () => {
+		if (!confirmReveal) {
+			setConfirmReveal(true)
+			return
+		}
 		setRevealedSolution(true)
 		setIsCorrect(false)
 		setPhase('feedback')
+		setConfirmReveal(false)
 	}
 
 	const handleNext = () => {
@@ -109,8 +115,21 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 					{CATEGORY_LABELS[puzzle.category]}
 				</Text>
 				<Text style={styles.progress}>
-					{index} / {total}
+					{index} из {total}
 				</Text>
+			</View>
+
+			<View
+				style={styles.progressTrack}
+				accessibilityRole="progressbar"
+				accessibilityValue={{ min: 0, max: total, now: index }}
+			>
+				<View
+					style={[
+						styles.progressFill,
+						{ width: `${Math.min(100, (index / total) * 100)}%` },
+					]}
+				/>
 			</View>
 
 			<View style={styles.card}>
@@ -167,14 +186,21 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 						</Pressable>
 						<Pressable
 							accessibilityRole="button"
-							accessibilityLabel="Показать решение"
+							accessibilityLabel={
+								confirmReveal
+									? 'Подтвердить показ решения'
+									: 'Показать решение'
+							}
 							onPress={handleReveal}
 							style={({ pressed }) => [
 								styles.secondaryBtn,
+								confirmReveal && styles.secondaryBtnWarn,
 								pressed && styles.pressed,
 							]}
 						>
-							<Text style={styles.secondaryBtnText}>Показать решение</Text>
+							<Text style={styles.secondaryBtnText}>
+								{confirmReveal ? 'Показать решение?' : 'Показать решение'}
+							</Text>
 						</Pressable>
 					</View>
 				</View>
@@ -253,6 +279,17 @@ const styles = StyleSheet.create({
 		...typography.caption,
 		color: colors.light.textSecondary,
 	},
+	progressTrack: {
+		height: 8,
+		borderRadius: radius.pill,
+		backgroundColor: colors.light.surfaceMuted,
+		overflow: 'hidden',
+	},
+	progressFill: {
+		height: '100%',
+		borderRadius: radius.pill,
+		backgroundColor: colors.light.primary,
+	},
 	card: {
 		backgroundColor: colors.light.surface,
 		borderRadius: radius.lg,
@@ -307,6 +344,10 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		paddingHorizontal: spacing.sm,
+	},
+	secondaryBtnWarn: {
+		borderColor: colors.light.warning,
+		backgroundColor: colors.light.warningMuted,
 	},
 	secondaryBtnText: {
 		...typography.caption,

@@ -36,4 +36,16 @@ describe('workout session accounting', () => {
 		expect(state.wrongCount).toBe(2)
 		expect(state.elapsedMs).toBe(0)
 	})
+
+	it('ignores duplicate completion across a 10-step cursor walk', () => {
+		startDemoWorkout(789)
+		recordPuzzleResult({ isCorrect: true, hintsUsed: 0 })
+		const live = getLiveWorkout()!
+		const scoredIndex = 0
+		live.currentIndex = scoredIndex
+		recordPuzzleResult({ isCorrect: false, hintsUsed: 3 })
+		expect(live.correctCount).toBe(1)
+		expect(live.wrongCount).toBe(0)
+		expect(live.hintsUsed).toBe(0)
+	})
 })

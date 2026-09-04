@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { PuzzleRunner } from '@/src/features/puzzles/engine/PuzzleRunner'
@@ -6,56 +6,63 @@ import {
 	getCurrentPuzzle,
 	getLiveWorkout,
 	recordPuzzleResult,
-	restoreDemoWorkout,
-	startDemoWorkout,
+	restoreActiveWorkout,
 } from '@/src/features/workout/sessionStore'
 import { colors, spacing, typography } from '@/src/theme'
 
 export default function WorkoutPlayScreen() {
 	const router = useRouter()
 	const [tick, setTick] = useState(0)
+	const [ready, setReady] = useState(false)
 
 	useFocusEffect(
 		useCallback(() => {
 			let active = true
-			void restoreDemoWorkout().then((restored) => {
-				if (!active) return
-				if (!restored && !getLiveWorkout()) startDemoWorkout()
-				setTick((n) => n + 1)
-			})
-			return () => { active = false }
+			void (async () => {
+				if (!getLiveWorkout()) {
+					await restoreActiveWorkout()
+				}
+				if (active) {
+					setReady(true)
+					setTick((n) => n + 1)
+				}
+			})()
+			return () => {
+				active = false
+			}
 		}, []),
 	)
 
 	const live = getLiveWorkout()
 	const puzzle = getCurrentPuzzle()
-
 	const total = live?.session.puzzles.length ?? 0
 	const index = (live?.currentIndex ?? 0) + 1
-
 	const runnerKey = useMemo(
 		() => `${puzzle?.id ?? 'none'}-${tick}`,
 		[puzzle?.id, tick],
 	)
 
-	useEffect(() => {
-		if (live?.finished) {
-			router.replace('/workout/result')
-		}
-	}, [live?.finished, router])
-
-	if (!live || live.finished) {
+	if (!ready) {
 		return (
 			<View style={styles.center}>
-				<Text style={styles.message}>Завершаем…</Text>
+				<Text style={styles.message}>Загрузка…</Text>
 			</View>
 		)
 	}
 
-	if (!puzzle) {
+	if (!live) {
 		return (
 			<View style={styles.center}>
 				<Text style={styles.message}>Тренировка не найдена</Text>
+			</View>
+		)
+	}
+
+	if (live.finished || !puzzle) {
+		router.replace('/workout/result')
+		return (
+			<View style={styles.center}>
+				<Text style={styles.message}>Завершаем…</Text>
 			</View>
 		)
 	}
@@ -71,6 +78,7 @@ export default function WorkoutPlayScreen() {
 					const next = recordPuzzleResult({
 						isCorrect: result.isCorrect,
 						hintsUsed: result.hintsUsed,
+						revealedSolution: result.revealedSolution,
 					})
 					if (next?.finished) {
 						router.replace('/workout/result')
@@ -84,10 +92,7 @@ export default function WorkoutPlayScreen() {
 }
 
 const styles = StyleSheet.create({
-	screen: {
-		flex: 1,
-		backgroundColor: colors.light.background,
-	},
+	screen: { flex: 1, backgroundColor: colors.light.background },
 	center: {
 		flex: 1,
 		alignItems: 'center',
@@ -95,8 +100,5 @@ const styles = StyleSheet.create({
 		backgroundColor: colors.light.background,
 		padding: spacing.lg,
 	},
-	message: {
-		...typography.body,
-		color: colors.light.textSecondary,
-	},
+	message: { ...typography.body, color: colors.light.textSecondary },
 })

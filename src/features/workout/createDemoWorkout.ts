@@ -6,7 +6,7 @@ import {
 	oddOneOutNumbersGenerator,
 	sequenceNumberGenerator,
 } from '../puzzles/generators'
-import { getCuratedById } from '../puzzles/curated/library'
+import { getCuratedById } from '../puzzles/curated'
 import { createRng } from '@/src/utils/prng'
 
 export type WorkoutPlanItem =
@@ -71,7 +71,7 @@ export function createDemoWorkout(baseSeed?: number): WorkoutSession {
 		},
 		{
 			source: 'curated',
-			curatedId: 'curated.logic.height-chain',
+			curatedId: 'curated.logic.p01',
 		},
 	]
 

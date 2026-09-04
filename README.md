@@ -75,15 +75,13 @@ UI и puzzle-domain разделены: экраны не содержат ло�
 
 Подробности: [docs/PUZZLE_ENGINE.md](docs/PUZZLE_ENGINE.md)
 
-## Demo
+## Demo / Daily
 
-На вкладке **Сегодня** кнопка «Начать тренировку» запускает мини-тренировку из **5** задач:
+На вкладке **Сегодня** — полноценная Daily Workout из **10** задач (детерминированная на календарный день + profile seed).
 
-1. sequence
-2. math pattern
-3. attention symbols
-4. odd one out (numbers)
-5. curated logic
+На вкладке **Играть** — practice по категориям (10 задач, без влияния на streak).
+
+Подробности движка: [docs/PUZZLE_ENGINE.md](docs/PUZZLE_ENGINE.md) · Storage: [docs/STORAGE.md](docs/STORAGE.md)
 
 ## Что сознательно не входит в Phase 0–1
 

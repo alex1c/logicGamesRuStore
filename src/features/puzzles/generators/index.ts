@@ -2,23 +2,36 @@ import { sequenceNumberGenerator } from './sequenceNumber'
 import { mathPatternGenerator } from './mathPattern'
 import { oddOneOutNumbersGenerator } from './oddOneOutNumbers'
 import { attentionSymbolsGenerator } from './attentionSymbols'
+import { sequenceNumberGeneratorV2 } from './sequenceNumberV2'
+import { mathPatternGeneratorV2 } from './mathPatternV2'
+import { oddOneOutNumbersGeneratorV2 } from './oddOneOutNumbersV2'
+import { attentionSymbolsGeneratorV2 } from './attentionSymbolsV2'
 import { registerGenerator, type PuzzleGenerator } from '../engine/generator'
 import type { Difficulty, Puzzle } from '../types'
 import { assertValidPuzzle, validatePuzzle } from '../validation/validatePuzzle'
 
-/** All shipped generators for this phase. */
+/** All shipped generators (v1 kept for identity replay + Codex audit). */
 export const ALL_GENERATORS: PuzzleGenerator[] = [
 	sequenceNumberGenerator,
 	mathPatternGenerator,
 	oddOneOutNumbersGenerator,
 	attentionSymbolsGenerator,
+	sequenceNumberGeneratorV2,
+	mathPatternGeneratorV2,
+	oddOneOutNumbersGeneratorV2,
+	attentionSymbolsGeneratorV2,
+]
+
+/** Current Phase-2 generators used by daily/practice planners. */
+export const PHASE2_GENERATORS: PuzzleGenerator[] = [
+	sequenceNumberGeneratorV2,
+	mathPatternGeneratorV2,
+	oddOneOutNumbersGeneratorV2,
+	attentionSymbolsGeneratorV2,
 ]
 
 let registered = false
 
-/**
- * Register built-in generators once (idempotent).
- */
 export function ensureGeneratorsRegistered(): void {
 	if (registered) {
 		return
@@ -33,16 +46,10 @@ export type SafeGenerateOptions = {
 	seed: number
 	difficulty: Difficulty
 	generator: PuzzleGenerator
-	/** How many alternate seeds to try if validation fails. */
 	maxAttempts?: number
-	/** When true, throw with diagnostics instead of skipping. */
 	strict?: boolean
 }
 
-/**
- * Generate a puzzle and validate it.
- * On failure: in strict/dev mode throw; otherwise try nearby seeds.
- */
 export function generateValidatedPuzzle(
 	options: SafeGenerateOptions,
 ): Puzzle {
@@ -50,7 +57,9 @@ export function generateValidatedPuzzle(
 	const maxAttempts = options.maxAttempts ?? 5
 	const strict =
 		options.strict ??
-		(typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production')
+		(typeof __DEV__ !== 'undefined'
+			? __DEV__
+			: process.env.NODE_ENV !== 'production')
 
 	let lastIssues = ''
 	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -85,6 +94,10 @@ export {
 	mathPatternGenerator,
 	oddOneOutNumbersGenerator,
 	attentionSymbolsGenerator,
+	sequenceNumberGeneratorV2,
+	mathPatternGeneratorV2,
+	oddOneOutNumbersGeneratorV2,
+	attentionSymbolsGeneratorV2,
 }
 
 ensureGeneratorsRegistered()

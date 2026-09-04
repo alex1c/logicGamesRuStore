@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import {
 	colors,
 	elevation,
@@ -15,7 +15,7 @@ type ButtonProps = {
 	variant?: 'primary' | 'secondary' | 'ghost'
 	disabled?: boolean
 	accessibilityLabel?: string
-	style?: ViewStyle
+	style?: StyleProp<ViewStyle>
 }
 
 export function AppButton({
@@ -60,7 +60,7 @@ export function AppButton({
 
 type CardProps = {
 	children: ReactNode
-	style?: ViewStyle
+	style?: StyleProp<ViewStyle>
 }
 
 export function SurfaceCard({ children, style }: CardProps) {
