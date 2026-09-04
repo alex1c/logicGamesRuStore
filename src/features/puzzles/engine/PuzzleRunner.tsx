@@ -46,6 +46,7 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 	const [revealedSolution, setRevealedSolution] = useState(false)
 	const [hintsUsed, setHintsUsed] = useState(0)
 	const completionSent = useRef(false)
+	const hintLevelRef = useRef(0)
 
 	const canSubmit = useMemo(() => {
 		if (selectedValue == null) {
@@ -69,10 +70,11 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 	}
 
 	const handleHint = () => {
-		if (hintLevelShown >= sortedHints.length) {
+		if (hintLevelRef.current >= sortedHints.length) {
 			return
 		}
-		setHintLevelShown((n) => n + 1)
+		hintLevelRef.current += 1
+		setHintLevelShown(hintLevelRef.current)
 		setHintsUsed((n) => n + 1)
 	}
 
