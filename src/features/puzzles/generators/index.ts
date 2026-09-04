@@ -59,7 +59,10 @@ export function generateValidatedPuzzle(
 			seed,
 			difficulty: options.difficulty,
 		})
-		const result = validatePuzzle(puzzle)
+		const result = validatePuzzle(puzzle, {
+			generatorId: options.generator.generatorId,
+			version: options.generator.version,
+		})
 		if (result.ok) {
 			return result.puzzle
 		}
@@ -83,3 +86,7 @@ export {
 	oddOneOutNumbersGenerator,
 	attentionSymbolsGenerator,
 }
+
+ensureGeneratorsRegistered()
+
+export { getGenerator, generatePuzzleByIdentity } from '../engine/generator'

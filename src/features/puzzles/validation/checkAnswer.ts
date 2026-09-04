@@ -13,6 +13,7 @@ export type AnswerCheckResult = {
  */
 export function normalizeRussianText(value: string): string {
 	return value
+		.normalize('NFC')
 		.trim()
 		.toLocaleLowerCase('ru-RU')
 		.replace(/ё/g, 'е')

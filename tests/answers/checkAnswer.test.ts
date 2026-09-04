@@ -85,6 +85,10 @@ describe('answer validation', () => {
 		expect(checkAnswer(puzzle, '15').isCorrect).toBe(false)
 		expect(checkAnswer(puzzle, '16.0').isCorrect).toBe(true)
 		expect(checkAnswer(puzzle, '16.5').isCorrect).toBe(false)
+		for (const invalid of ['5,0', '16abc', 'Infinity', 'NaN', '', '   ', '1e1']) {
+			expect(checkAnswer(puzzle, invalid).isCorrect).toBe(false)
+		}
+		expect(checkAnswer(puzzle, '016').isCorrect).toBe(true)
 	})
 
 	it('checks multiple choice by option id', () => {
@@ -107,5 +111,12 @@ describe('answer validation', () => {
 			acceptedAnswers: [],
 		}
 		expect(checkAnswer(yoPuzzle, 'Ёлка').isCorrect).toBe(true)
+	})
+
+	it('normalizes Unicode composition and spaces but keeps punctuation significant', () => {
+		const puzzle = textPuzzle()
+		puzzle.answer = 'йод без сахара'
+		expect(checkAnswer(puzzle, 'и\u0306од   без сахара').isCorrect).toBe(true)
+		expect(checkAnswer(puzzle, 'йод без сахара!').isCorrect).toBe(false)
 	})
 })

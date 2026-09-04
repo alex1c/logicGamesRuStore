@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 }
 
 export type DemoWorkoutPersisted = {
+	schemaVersion: 1
 	sessionId: string
 	puzzleIds: string[]
 	currentIndex: number
@@ -79,7 +80,16 @@ export async function saveSettings(
 }
 
 export async function getDemoWorkout(): Promise<DemoWorkoutPersisted | null> {
-	return readJson<DemoWorkoutPersisted>(KEYS.demoWorkout)
+	const value = await readJson<DemoWorkoutPersisted>(KEYS.demoWorkout)
+	if (
+		!value ||
+		value.schemaVersion !== 1 ||
+		typeof value.sessionId !== 'string' ||
+		!Array.isArray(value.puzzleIds) ||
+		!Array.isArray(value.results) ||
+		![value.currentIndex, value.correctCount, value.wrongCount, value.hintsUsed, value.startedAt].every(Number.isFinite)
+	) return null
+	return value
 }
 
 export async function saveDemoWorkout(

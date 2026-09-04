@@ -69,8 +69,29 @@ export function registerGenerator(generator: PuzzleGenerator): void {
 	registry.set(generator.generatorId, generator)
 }
 
-export function getGenerator(generatorId: string): PuzzleGenerator | undefined {
-	return registry.get(generatorId)
+export function getGenerator(
+	generatorId: string,
+	version?: number,
+): PuzzleGenerator | undefined {
+	return registry.get(
+		version === undefined ? generatorId : `${generatorId}@${version}`,
+	)
+}
+
+/** Recreate a persisted generated puzzle using its exact algorithm version. */
+export function generatePuzzleByIdentity(input: {
+	generatorId: string
+	version: number
+	seed: number
+	difficulty: Difficulty
+}): Puzzle {
+	const generator = getGenerator(input.generatorId, input.version)
+	if (!generator) {
+		throw new Error(
+			`Unknown generator version: ${input.generatorId}@${input.version}`,
+		)
+	}
+	return generator.generate({ seed: input.seed, difficulty: input.difficulty })
 }
 
 export function listGenerators(): PuzzleGenerator[] {

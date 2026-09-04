@@ -30,8 +30,12 @@ function generateMathPatternPuzzle(
 
 	const rows: [number, number, number][] = []
 	for (let r = 0; r < 3; r += 1) {
-		const a = rng.nextInt(1, maxOperand)
-		const b = rng.nextInt(1, maxOperand)
+		let a = rng.nextInt(1, maxOperand)
+		let b = rng.nextInt(1, maxOperand)
+		while (r === 1 && a === rows[0][0] && b === rows[0][1]) {
+			a = rng.nextInt(1, maxOperand)
+			b = rng.nextInt(1, maxOperand)
+		}
 		rows.push([a, b, a + b])
 	}
 

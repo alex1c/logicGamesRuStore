@@ -6,6 +6,7 @@ import {
 	getCurrentPuzzle,
 	getLiveWorkout,
 	recordPuzzleResult,
+	restoreDemoWorkout,
 	startDemoWorkout,
 } from '@/src/features/workout/sessionStore'
 import { colors, spacing, typography } from '@/src/theme'
@@ -16,10 +17,13 @@ export default function WorkoutPlayScreen() {
 
 	useFocusEffect(
 		useCallback(() => {
-			if (!getLiveWorkout()) {
-				startDemoWorkout()
-			}
-			setTick((n) => n + 1)
+			let active = true
+			void restoreDemoWorkout().then((restored) => {
+				if (!active) return
+				if (!restored && !getLiveWorkout()) startDemoWorkout()
+				setTick((n) => n + 1)
+			})
+			return () => { active = false }
 		}, []),
 	)
 

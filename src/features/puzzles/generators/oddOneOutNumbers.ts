@@ -19,8 +19,8 @@ type PropertyKind =
 	| 'perfect_square'
 	| 'prime'
 
-const SMALL_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31] as const
-const SMALL_SQUARES = [1, 4, 9, 16, 25, 36, 49, 64, 81] as const
+const SMALL_PRIMES = [11, 13, 17, 19, 23, 29, 31] as const
+const SMALL_SQUARES = [16, 25, 36, 49, 64, 81] as const
 
 function kindsForDifficulty(difficulty: Difficulty): PropertyKind[] {
 	if (difficulty <= 2) {
@@ -59,17 +59,17 @@ function buildParity(
 } {
 	const majority: number[] = []
 	while (majority.length < 3) {
-		const n = rng.nextInt(1, 40)
+		const n = rng.nextInt(10, 40)
 		if (majorityEven ? n % 2 === 0 : n % 2 === 1) {
 			uniquePush(majority, n)
 		}
 	}
-	let oddOne = rng.nextInt(1, 40)
+	let oddOne = rng.nextInt(10, 40)
 	while (
 		(majorityEven ? oddOne % 2 === 0 : oddOne % 2 === 1) ||
 		majority.includes(oddOne)
 	) {
-		oddOne = rng.nextInt(1, 40)
+		oddOne = rng.nextInt(10, 40)
 	}
 	const numbers = rng.shuffle([...majority, oddOne])
 	const oddIndex = numbers.indexOf(oddOne)
@@ -96,12 +96,12 @@ function buildDivisible(rng: RandomSource): {
 	const divisor = rng.pick([3, 4, 5])
 	const majority: number[] = []
 	while (majority.length < 3) {
-		const k = rng.nextInt(1, 12)
+		const k = rng.nextInt(Math.ceil(10 / divisor), 12)
 		uniquePush(majority, k * divisor)
 	}
-	let oddOne = rng.nextInt(1, 48)
+	let oddOne = rng.nextInt(10, 48)
 	while (oddOne % divisor === 0 || majority.includes(oddOne)) {
-		oddOne = rng.nextInt(1, 48)
+		oddOne = rng.nextInt(10, 48)
 	}
 	const numbers = rng.shuffle([...majority, oddOne])
 	const oddIndex = numbers.indexOf(oddOne)
@@ -124,12 +124,12 @@ function buildSquare(rng: RandomSource): {
 	mechanic: string
 } {
 	const majority: number[] = rng.shuffle([...SMALL_SQUARES]).slice(0, 3)
-	let oddOne = rng.nextInt(2, 60)
+	let oddOne = rng.nextInt(10, 60)
 	while (
 		(SMALL_SQUARES as readonly number[]).includes(oddOne) ||
 		majority.includes(oddOne)
 	) {
-		oddOne = rng.nextInt(2, 60)
+		oddOne = rng.nextInt(10, 60)
 	}
 	const numbers = rng.shuffle([...majority, oddOne])
 	const oddIndex = numbers.indexOf(oddOne)
@@ -153,7 +153,7 @@ function buildPrime(rng: RandomSource): {
 } {
 	const majority: number[] = rng.shuffle([...SMALL_PRIMES]).slice(0, 3)
 	const composites = [
-		4, 6, 8, 9, 10, 12, 14, 15, 16, 18, 20, 21, 22, 24, 25, 26, 27, 28,
+		10, 12, 14, 15, 16, 18, 20, 21, 22, 24, 25, 26, 27, 28,
 	]
 	let oddOne = rng.pick(composites)
 	while (majority.includes(oddOne)) {

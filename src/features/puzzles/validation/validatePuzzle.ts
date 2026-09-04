@@ -163,6 +163,15 @@ function validateNumeric(
 			path: 'answer',
 		})
 	}
+	if (typeof puzzle.integerOnly !== 'boolean') {
+		issues.push({ code: 'INVALID_INTEGER_ONLY', message: 'integerOnly must be boolean', path: 'integerOnly' })
+	}
+	if (puzzle.inputBounds) {
+		const { min, max } = puzzle.inputBounds
+		if ((min !== undefined && !isFiniteNumber(min)) || (max !== undefined && !isFiniteNumber(max)) || (isFiniteNumber(min) && isFiniteNumber(max) && min > max)) {
+			issues.push({ code: 'INVALID_INPUT_BOUNDS', message: 'input bounds must be finite and min <= max', path: 'inputBounds' })
+		}
+	}
 }
 
 function validateSelectItem(
@@ -214,12 +223,19 @@ function validateText(
 	issues: ValidationIssue[],
 ): void {
 	requireNonEmptyString(puzzle.answer, 'answer', issues)
+	for (const [index, answer] of (puzzle.acceptedAnswers ?? []).entries()) {
+		requireNonEmptyString(answer, `acceptedAnswers[${index}]`, issues)
+	}
 }
 
 function validateTapTarget(
 	puzzle: TapTargetPuzzle,
 	issues: ValidationIssue[],
 ): void {
+	if (!puzzle.grid || typeof puzzle.grid !== 'object') {
+		issues.push({ code: 'INVALID_GRID', message: 'grid is required', path: 'grid' })
+		return
+	}
 	const { rows, cols, cells } = puzzle.grid
 	if (!Number.isInteger(rows) || rows < 2) {
 		issues.push({
@@ -270,9 +286,27 @@ function validateTapTarget(
  * Validate a puzzle before it reaches the UI.
  * Returns structured issues — never throws for content problems.
  */
-export function validatePuzzle(puzzle: Puzzle): ValidationResult {
+export function validatePuzzle(
+	value: unknown,
+	expectedGenerator?: { generatorId: string; version: number },
+): ValidationResult {
 	const issues: ValidationIssue[] = []
+	if (!value || typeof value !== 'object') {
+		return { ok: false, issues: [{ code: 'INVALID_PUZZLE', message: 'puzzle must be an object' }] }
+	}
+	const puzzle = value as Puzzle
 	validateBase(puzzle, issues)
+	if (expectedGenerator && (
+		puzzle.metadata?.generatorId !== expectedGenerator.generatorId ||
+		puzzle.metadata?.generatorVersion !== expectedGenerator.version ||
+		puzzle.type !== expectedGenerator.generatorId
+	)) {
+		issues.push({
+			code: 'GENERATOR_IDENTITY_MISMATCH',
+			message: 'puzzle type/metadata do not match the requested generator version',
+			path: 'metadata',
+		})
+	}
 
 	switch (puzzle.interactionType) {
 		case 'multiple_choice':

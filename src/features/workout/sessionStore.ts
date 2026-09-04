@@ -2,6 +2,7 @@ import type { Puzzle } from '@/src/features/puzzles/types'
 import { createDemoWorkout, type WorkoutSession } from '@/src/features/workout/createDemoWorkout'
 import {
 	clearDemoWorkout,
+	getDemoWorkout,
 	saveDemoWorkout,
 	type DemoWorkoutPersisted,
 } from '@/src/storage'
@@ -37,7 +38,40 @@ export function startDemoWorkout(baseSeed?: number): WorkoutLiveState {
 		finished: false,
 		elapsedMs: 0,
 	}
-	void persist()
+	void persist().catch(() => undefined)
+	return live
+}
+
+/** Restore an unfinished, structurally valid demo session after process restart. */
+export async function restoreDemoWorkout(): Promise<WorkoutLiveState | null> {
+	if (live) return live
+	const saved = await getDemoWorkout()
+	if (!saved || !saved.sessionId.startsWith('demo-')) return null
+	const baseSeed = Number(saved.sessionId.slice(5))
+	if (!Number.isFinite(baseSeed)) return null
+	const session = createDemoWorkout(baseSeed)
+	const valid =
+		saved.puzzleIds.length === session.puzzles.length &&
+		saved.puzzleIds.every((id, index) => id === session.puzzles[index].id) &&
+		saved.results.length === session.puzzles.length &&
+		saved.results.every((result) => ['pending', 'correct', 'wrong'].includes(result)) &&
+		Number.isInteger(saved.currentIndex) &&
+		saved.currentIndex >= 0 &&
+		saved.currentIndex < session.puzzles.length &&
+		[saved.correctCount, saved.wrongCount, saved.hintsUsed, saved.startedAt].every(Number.isFinite) &&
+		saved.correctCount >= 0 && saved.wrongCount >= 0 && saved.hintsUsed >= 0
+	if (!valid) return null
+	live = {
+		session,
+		currentIndex: saved.currentIndex,
+		correctCount: saved.correctCount,
+		wrongCount: saved.wrongCount,
+		hintsUsed: saved.hintsUsed,
+		startedAt: saved.startedAt,
+		results: saved.results,
+		finished: false,
+		elapsedMs: 0,
+	}
 	return live
 }
 
@@ -56,6 +90,9 @@ export function recordPuzzleResult(input: {
 		return null
 	}
 	const index = live.currentIndex
+	if (live.finished || live.results[index] !== 'pending') {
+		return live
+	}
 	live.hintsUsed += input.hintsUsed
 	if (input.isCorrect) {
 		live.correctCount += 1
@@ -67,18 +104,18 @@ export function recordPuzzleResult(input: {
 
 	if (index + 1 >= live.session.puzzles.length) {
 		live.finished = true
-		live.elapsedMs = Date.now() - live.startedAt
+		live.elapsedMs = Math.max(0, Date.now() - live.startedAt)
 		live.currentIndex = index
 	} else {
 		live.currentIndex = index + 1
 	}
-	void persist()
+	void persist().catch(() => undefined)
 	return live
 }
 
 export function abandonWorkout(): void {
 	live = null
-	void clearDemoWorkout()
+	void clearDemoWorkout().catch(() => undefined)
 }
 
 async function persist(): Promise<void> {
@@ -87,6 +124,7 @@ async function persist(): Promise<void> {
 		return
 	}
 	const payload: DemoWorkoutPersisted = {
+		schemaVersion: 1,
 		sessionId: live.session.id,
 		puzzleIds: live.session.puzzles.map((p) => p.id),
 		currentIndex: live.currentIndex,

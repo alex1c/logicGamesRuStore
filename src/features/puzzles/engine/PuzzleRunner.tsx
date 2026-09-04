@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
 	Pressable,
 	ScrollView,
@@ -45,6 +45,7 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 	const [hintLevelShown, setHintLevelShown] = useState(0)
 	const [revealedSolution, setRevealedSolution] = useState(false)
 	const [hintsUsed, setHintsUsed] = useState(0)
+	const completionSent = useRef(false)
 
 	const canSubmit = useMemo(() => {
 		if (selectedValue == null) {
@@ -82,6 +83,10 @@ export function PuzzleRunner({ puzzle, index, total, onComplete }: Props) {
 	}
 
 	const handleNext = () => {
+		if (completionSent.current) {
+			return
+		}
+		completionSent.current = true
 		onComplete({
 			isCorrect: isCorrect && !revealedSolution,
 			hintsUsed,
