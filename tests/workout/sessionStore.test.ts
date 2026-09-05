@@ -1,6 +1,7 @@
 import {
 	abandonWorkout,
 	getLiveWorkout,
+	getPracticeResumeInfo,
 	recordPuzzleResult,
 	startDemoWorkout,
 	waitForSessionPersistence,
@@ -69,6 +70,20 @@ describe('workout session accounting', () => {
 		expect(live.correctCount).toBe(1)
 		expect(live.wrongCount).toBe(0)
 		expect(live.hintsUsed).toBe(0)
+	})
+
+	it('exposes a persisted practice position for the Play resume entry point', () => {
+		const state = startDemoWorkout(790)
+		state.sessionType = 'practice'
+		state.practiceCategory = 'logic'
+		state.currentIndex = 3
+		expect(getPracticeResumeInfo(state)).toEqual({
+			category: 'logic',
+			currentIndex: 3,
+			total: 5,
+		})
+		state.finished = true
+		expect(getPracticeResumeInfo(state)).toBeNull()
 	})
 
 	it('serializes skill updates and final accounting', async () => {

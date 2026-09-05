@@ -250,12 +250,12 @@ export function describeMove(
 	if (!from || !to) {
 		return 'Переместите одну спичку.'
 	}
-	const fromLabel = cellRoleLabel(from.cellId)
-	const toLabel = cellRoleLabel(to.cellId)
-	return `Перенесите спичку из ${fromLabel} в ${toLabel}.`
+	const fromLabel = sourceCellLabel(from.cellId)
+	const toLabel = destinationCellLabel(to.cellId)
+	return `Перенесите ${sourceSegmentLabel(from.segmentKey)} из ${fromLabel} на место ${destinationSegmentLabel(to.segmentKey)} ${toLabel}.`
 }
 
-function cellRoleLabel(cellId: string): string {
+function sourceCellLabel(cellId: string): string {
 	switch (cellId) {
 		case 'L':
 			return 'левой цифры'
@@ -269,5 +269,56 @@ function cellRoleLabel(cellId: string): string {
 			return 'знака равенства'
 		default:
 			return 'фигуры'
+	}
+}
+
+function destinationCellLabel(cellId: string): string {
+	switch (cellId) {
+		case 'L':
+			return 'в левой цифре'
+		case 'R':
+			return 'в правой цифре'
+		case 'RES':
+			return 'в результате'
+		case 'OP':
+			return 'в знаке операции'
+		case 'EQ':
+			return 'в знаке равенства'
+		default:
+			return 'в фигуре'
+	}
+}
+
+function sourceSegmentLabel(segmentKey: string): string {
+	switch (segmentKey) {
+		case 'a': return 'верхнюю спичку'
+		case 'b': return 'верхнюю правую спичку'
+		case 'c': return 'нижнюю правую спичку'
+		case 'd': return 'нижнюю спичку'
+		case 'e': return 'нижнюю левую спичку'
+		case 'f': return 'верхнюю левую спичку'
+		case 'g': return 'среднюю спичку'
+		case 'v': return 'вертикальную спичку'
+		case 'h': return 'горизонтальную спичку'
+		case 'eq1': return 'верхнюю спичку'
+		case 'eq2': return 'нижнюю спичку'
+		default: return 'спичку'
+	}
+}
+
+function destinationSegmentLabel(segmentKey: string): string {
+	switch (segmentKey) {
+		case 'a': return 'верхней спички'
+		case 'b': return 'верхней правой спички'
+		case 'c': return 'нижней правой спички'
+		case 'd': return 'нижней спички'
+		case 'e': return 'нижней левой спички'
+		case 'f': return 'верхней левой спички'
+		case 'g': return 'средней спички'
+		case 'v': return 'вертикальной спички'
+		case 'h': return 'горизонтальной спички'
+		case 'eq1': return 'верхней спички'
+		case 'eq2': return 'нижней спички'
+		default: return 'спички'
 	}
 }

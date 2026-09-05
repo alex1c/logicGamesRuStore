@@ -23,6 +23,38 @@ type PropertyKind =
 const SMALL_PRIMES = [11, 13, 17, 19, 23, 29, 31] as const
 const SMALL_SQUARES = [16, 25, 36, 49, 64, 81] as const
 
+function isPrime(value: number): boolean {
+	if (value < 2) return false
+	for (let divisor = 2; divisor * divisor <= value; divisor += 1) {
+		if (value % divisor === 0) return false
+	}
+	return true
+}
+
+export function hasConflictingSimpleOutlier(
+	numbers: readonly number[],
+	intendedOddIndex: number,
+): boolean {
+	const predicates: ((value: number) => boolean)[] = [
+		(value) => value % 2 === 0,
+		(value) => Number.isInteger(Math.sqrt(value)),
+		isPrime,
+		...([3, 4, 5] as const).map(
+			(divisor) => (value: number) => value % divisor === 0,
+		),
+		(value) => String(Math.abs(value)).length === 1,
+	]
+	return predicates.some((predicate) => {
+		const matching = numbers.map(predicate)
+		const count = matching.filter(Boolean).length
+		if (count !== 1 && count !== numbers.length - 1) return false
+		const outlierIndex = count === 1
+			? matching.indexOf(true)
+			: matching.indexOf(false)
+		return outlierIndex !== intendedOddIndex
+	})
+}
+
 function kindsForDifficulty(difficulty: Difficulty): PropertyKind[] {
 	if (difficulty <= 2) {
 		return ['parity_even', 'parity_odd']
@@ -210,34 +242,47 @@ function generateOddOneOutPuzzle(
 	let kind = rng.pick(kindsForDifficulty(input.difficulty))
 
 	let built: ReturnType<typeof buildParity> | null = null
-	for (let attempt = 0; attempt < 6 && !built; attempt += 1) {
+	for (let attempt = 0; attempt < 40 && !built; attempt += 1) {
 		try {
+			let candidate: ReturnType<typeof buildParity>
 			switch (kind) {
 				case 'parity_even':
-					built = buildParity(rng, true)
+					candidate = buildParity(rng, true)
 					break
 				case 'parity_odd':
-					built = buildParity(rng, false)
+					candidate = buildParity(rng, false)
 					break
 				case 'divisible_by':
-					built = buildDivisible(rng)
+					candidate = buildDivisible(rng)
 					break
 				case 'perfect_square':
-					built = buildSquare(rng)
+					candidate = buildSquare(rng)
 					break
 				case 'prime':
-					built = buildPrime(rng)
+					candidate = buildPrime(rng)
 					break
 				case 'multiples':
-					built = buildMultiples(rng)
+					candidate = buildMultiples(rng)
 					break
 			}
+			if (!hasConflictingSimpleOutlier(candidate.numbers, candidate.oddIndex)) {
+				built = candidate
+			}
 		} catch {
-			kind = rng.pick(kindsForDifficulty(input.difficulty))
+			// Continue with another deterministic candidate.
 		}
+		kind = rng.pick(kindsForDifficulty(input.difficulty))
 	}
 	if (!built) {
-		built = buildParity(rng, true)
+		const numbers = rng.shuffle([12, 18, 24, 31])
+		built = {
+			numbers,
+			oddIndex: numbers.indexOf(31),
+			hint1: 'Смотрите на чётность чисел.',
+			hint2: 'Три числа чётные, одно — нет.',
+			explanation: 'Числа 12, 18 и 24 — чётные. Число 31 — нечётное, поэтому оно лишнее.',
+			mechanic: 'parity_even',
+		}
 	}
 
 	const items = built.numbers.map((n, index) => ({

@@ -86,6 +86,24 @@ export function getLiveWorkout(): WorkoutLiveState | null {
 	return live
 }
 
+export function getPracticeResumeInfo(
+	state: WorkoutLiveState | null = live,
+): { category: PuzzleCategory; currentIndex: number; total: number } | null {
+	if (
+		!state ||
+		state.finished ||
+		state.sessionType !== 'practice' ||
+		!state.practiceCategory
+	) {
+		return null
+	}
+	return {
+		category: state.practiceCategory,
+		currentIndex: state.currentIndex,
+		total: state.session.puzzles.length,
+	}
+}
+
 function toLegacySession(
 	id: string,
 	title: string,

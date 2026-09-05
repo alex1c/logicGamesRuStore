@@ -1,9 +1,15 @@
 import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { SurfaceCard } from '@/src/components/ui'
+import { AppButton, SurfaceCard } from '@/src/components/ui'
 import { PLAYABLE_CATEGORIES } from '@/src/features/workout/createDailyWorkout'
-import { startPracticeSession } from '@/src/features/workout/sessionStore'
+import {
+	getLiveWorkout,
+	getPracticeResumeInfo,
+	restoreActiveWorkout,
+	startPracticeSession,
+} from '@/src/features/workout/sessionStore'
 import { CATEGORY_LABELS, type PuzzleCategory } from '@/src/features/puzzles/types'
 import { colors, elevation, radius, spacing, typography } from '@/src/theme'
 import { hapticSelect } from '@/src/utils/haptics'
@@ -32,6 +38,25 @@ const ICONS: Record<PuzzleCategory, string> = {
 export default function PlayScreen() {
 	const router = useRouter()
 	const insets = useSafeAreaInsets()
+	const [resume, setResume] = useState<{
+		category: PuzzleCategory
+		currentIndex: number
+		total: number
+	} | null>(null)
+
+	useFocusEffect(
+		useCallback(() => {
+			let active = true
+			void (async () => {
+				await restoreActiveWorkout()
+				const nextResume = getPracticeResumeInfo(getLiveWorkout())
+				if (active) setResume(nextResume)
+			})()
+			return () => {
+				active = false
+			}
+		}, []),
+	)
 
 	const handleCategory = async (category: PuzzleCategory) => {
 		void hapticSelect()
@@ -52,6 +77,20 @@ export default function PlayScreen() {
 				Выберите категорию — 10 задач без лимита времени. Практика не влияет
 				на дневную серию.
 			</Text>
+
+			{resume ? (
+				<SurfaceCard style={styles.resumeCard}>
+					<Text style={styles.resumeTitle}>Продолжить тренировку</Text>
+					<Text style={styles.resumeBody}>
+						{CATEGORY_LABELS[resume.category]} · задача {resume.currentIndex + 1} из{' '}
+						{resume.total}
+					</Text>
+					<AppButton
+						label="Продолжить"
+						onPress={() => router.push('/workout/play')}
+					/>
+				</SurfaceCard>
+			) : null}
 
 			{PLAYABLE_CATEGORIES.map((category, index) => (
 				<View key={category}>
@@ -93,6 +132,9 @@ const styles = StyleSheet.create({
 		color: colors.light.textSecondary,
 		marginBottom: spacing.sm,
 	},
+	resumeCard: { ...elevation.sm, gap: spacing.sm },
+	resumeTitle: { ...typography.subtitle, color: colors.light.textPrimary },
+	resumeBody: { ...typography.body, color: colors.light.textSecondary },
 	card: { ...elevation.sm },
 	cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
 	iconWrap: {
