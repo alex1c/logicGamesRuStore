@@ -11,6 +11,7 @@ import {
 	wasInterstitialShownThisAppSession,
 } from '@/src/monetization/session'
 import { trackEvent } from '@/src/analytics'
+import { isStoreScreenshotMode } from '@/src/constants/screenshotMode'
 
 type LoadedInterstitial = {
 	show: () => void
@@ -86,6 +87,10 @@ export async function preloadInterstitial(): Promise<void> {
  * Never blocks navigation with a spinner — resolves when closed or skipped.
  */
 export async function maybeShowInterstitial(): Promise<'shown' | 'skipped'> {
+	// Never interrupt RuStore screenshot capture with ads.
+	if (isStoreScreenshotMode) {
+		return 'skipped'
+	}
 	if (showInFlight || wasInterstitialShownThisAppSession()) {
 		return 'skipped'
 	}

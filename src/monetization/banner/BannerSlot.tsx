@@ -4,6 +4,7 @@ import type { BannerPlacement } from '@/src/monetization/config'
 import { ADS_CONFIG, resolveAdUnitId } from '@/src/monetization/config'
 import { trackEvent } from '@/src/analytics'
 import { spacing } from '@/src/theme'
+import { isStoreScreenshotMode } from '@/src/constants/screenshotMode'
 
 type Props = {
 	placement: BannerPlacement
@@ -25,6 +26,10 @@ export function BannerSlot({ placement }: Props) {
 	const unitId = resolveAdUnitId('banner')
 
 	const BannerView = useMemo(() => {
+		// Dev-only RuStore capture: never request / render banners.
+		if (isStoreScreenshotMode) {
+			return null
+		}
 		if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
 			return null
 		}

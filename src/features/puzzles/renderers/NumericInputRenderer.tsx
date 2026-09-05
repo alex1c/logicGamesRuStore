@@ -1,6 +1,7 @@
 import { StyleSheet, TextInput, View } from 'react-native'
 import type { NumericInputPuzzle } from '../types'
 import { colors, radius, spacing, touchTarget, typography } from '@/src/theme'
+import { isStoreScreenshotMode } from '@/src/constants/screenshotMode'
 
 type Props = {
 	puzzle: NumericInputPuzzle
@@ -25,6 +26,8 @@ export function NumericInputRenderer({
 				onChangeText={onSelect}
 				placeholder="Введите число"
 				placeholderTextColor={colors.light.textTertiary}
+				// Keep storefront frames keyboard-free in screenshot capture builds.
+				showSoftInputOnFocus={!isStoreScreenshotMode}
 				style={[styles.input, disabled && styles.inputDisabled]}
 			/>
 		</View>

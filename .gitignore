@@ -55,3 +55,6 @@ coverage/
 # IDE / agent noise
 .claude/
 .idea/
+
+.tmp-screenshots/
+

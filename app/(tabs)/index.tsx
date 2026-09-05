@@ -136,7 +136,7 @@ export default function TodayScreen() {
 
 			{!done && (
 				<SurfaceCard style={styles.heroCard}>
-					<Text style={styles.heroTitle}>Daily Workout</Text>
+					<Text style={styles.heroTitle}>Сегодняшняя тренировка</Text>
 					{state.mix.map((row) => (
 						<View key={row.category} style={styles.mixRow}>
 							<Text style={styles.mixLabel}>
