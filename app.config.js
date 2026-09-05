@@ -42,6 +42,8 @@ const expoConfig = {
 			},
 		],
 		'expo-dev-client',
+		// Local production keystore via credentials/keystore.properties (gitignored).
+		'./plugins/withReleaseSigning',
 	],
 	experiments: {
 		typedRoutes: true,

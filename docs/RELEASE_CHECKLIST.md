@@ -80,13 +80,20 @@ Privacy (expected GitHub Pages URL):
 ## Signing (user creates keystore separately)
 
 Do **not** auto-generate a production keystore in CI/agent.
+Do **not** copy the `.jks` into the Git repository.
 
-1. [ ] Create a dedicated production keystore for `ru.forestmusic.logicgames`
+Confirmed local keystore (outside repo):
+
+- Path: `D:\PetProject\secure\logicGames\logic-games-release.jks`
+- Alias: `logicgames`
+
+1. [x] Dedicated production keystore for `ru.forestmusic.logicgames` exists outside the repo
 2. [ ] Backup keystore the same day
 3. [ ] Store password separately from the repo
 4. [ ] Never lose the keystore — required for future updates
-5. [ ] Copy `credentials/keystore.properties.example` → local gitignored `keystore.properties` (placeholders only in git)
+5. [ ] Copy `credentials/keystore.properties.example` → local gitignored `keystore.properties` (point `storeFile` at the absolute path above)
 6. [ ] Confirm `.jks` / `.keystore` / real passwords are **not** committed
+7. [ ] `plugins/withReleaseSigning` is listed in `app.config.js` so prebuild wires `signingConfigs.release`
 
 ---
 
